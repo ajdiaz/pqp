@@ -57,11 +57,19 @@ fn main() -> Result<()> {
             sign,
             signer,
         } => {
+            let recipient_id =
+                keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
+
+            let signer_id = match &signer {
+                Some(s) => Some(keyring::resolve_key_id(s).context("resolving signer key")?),
+                None => None,
+            };
+
             let passphrase = if sign {
-                let signer = signer.as_deref().unwrap_or(&recipient);
+                let sid = signer_id.as_deref().unwrap_or(&recipient_id);
                 Some(read_passphrase(&format!(
                     "Enter passphrase for key {}: ",
-                    signer
+                    sid
                 ))?)
             } else {
                 None
@@ -70,7 +78,7 @@ fn main() -> Result<()> {
             let data = read_file(&input)?;
 
             let (kem_pk, _) =
-                keyring::load_public_key(&recipient).context("loading recipient public key")?;
+                keyring::load_public_key(&recipient_id).context("loading recipient public key")?;
             let kem_pk = crypto::kem::PublicKey::from_bytes(&kem_pk)?;
 
             let (ct, shared_secret) = crypto::kem::encapsulate(&kem_pk)?;
@@ -89,9 +97,9 @@ fn main() -> Result<()> {
             ]);
 
             if sign {
-                let signer_id = signer.as_deref().unwrap_or(&recipient);
+                let sid = signer_id.as_deref().unwrap_or(&recipient_id);
                 let mut passphrase = passphrase.unwrap();
-                let (_, sign_sk) = keyring::load_secret_key(signer_id, &passphrase)
+                let (_, sign_sk) = keyring::load_secret_key(sid, &passphrase)
                     .context("loading signer secret key")?;
                 passphrase.zeroize();
 
@@ -160,11 +168,12 @@ fn main() -> Result<()> {
             output,
             input,
         } => {
+            let user_id = keyring::resolve_key_id(&user).context("resolving signing key")?;
             let passphrase = read_passphrase("Enter passphrase for signing key: ")?;
             let data = read_file(&input)?;
 
             let (_, sign_sk) =
-                keyring::load_secret_key(&user, &passphrase).context("loading secret key")?;
+                keyring::load_secret_key(&user_id, &passphrase).context("loading secret key")?;
 
             let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk)?;
 
@@ -237,7 +246,8 @@ fn main() -> Result<()> {
             }
         }
         Commands::Export { key_id, output } => {
-            let armored = keyring::export_public_key(&key_id)?;
+            let resolved_id = keyring::resolve_key_id(&key_id)?;
+            let armored = keyring::export_public_key(&resolved_id)?;
             let out_path = output.unwrap_or_else(|| format!("{}.pqp.asc", key_id));
             write_file(&out_path, armored.as_bytes())?;
             println!("Exported: {}", out_path);

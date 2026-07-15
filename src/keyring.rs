@@ -87,6 +87,37 @@ fn is_leap_year(year: u64) -> bool {
     year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
 }
 
+pub fn resolve_key_id(identifier: &str) -> Result<String> {
+    let dir = keys_dir()?;
+    if !dir.exists() {
+        return Err(anyhow::anyhow!("key not found: {}", identifier));
+    }
+
+    let key_dir = dir.join(identifier);
+    if key_dir.is_dir() && key_dir.join("pqp.conf").exists() {
+        return Ok(identifier.to_string());
+    }
+
+    for entry in std::fs::read_dir(&dir).context("reading keys directory")? {
+        let entry = entry?;
+        let conf_path = entry.path().join("pqp.conf");
+        if conf_path.exists() {
+            let content = std::fs::read_to_string(&conf_path)
+                .context(format!("reading {}", conf_path.display()))?;
+            let meta: KeyMetadata = serde_json::from_str(&content)
+                .context(format!("parsing {}", conf_path.display()))?;
+            if meta.user_id == identifier {
+                return Ok(meta.key_id);
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "key not found by identifier: {}",
+        identifier
+    ))
+}
+
 pub fn list_keys() -> Result<Vec<KeyMetadata>> {
     let dir = keys_dir()?;
     if !dir.exists() {

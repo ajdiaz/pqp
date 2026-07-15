@@ -18,7 +18,7 @@ pub enum Commands {
     ListKeys,
     #[command(name = "encrypt", about = "Encrypt a file for a recipient")]
     Encrypt {
-        #[arg(short = 'r', long = "recipient", help = "Recipient key ID")]
+        #[arg(short = 'r', long = "recipient", help = "Recipient key ID or user ID")]
         recipient: String,
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
@@ -30,7 +30,11 @@ pub enum Commands {
             help = "Sign the ciphertext with sender key"
         )]
         sign: bool,
-        #[arg(short = 'u', long = "signer", help = "Signer key ID (requires --sign)")]
+        #[arg(
+            short = 'u',
+            long = "signer",
+            help = "Signer key ID or user ID (requires --sign)"
+        )]
         signer: Option<String>,
     },
     #[command(name = "decrypt", about = "Decrypt a file")]
@@ -42,7 +46,7 @@ pub enum Commands {
     },
     #[command(name = "sign", about = "Sign a file")]
     Sign {
-        #[arg(short = 'u', long = "user", help = "Signing key ID")]
+        #[arg(short = 'u', long = "user", help = "Signing key ID or user ID")]
         user: String,
         #[arg(short = 'o', long = "output", help = "Output signature file path")]
         output: Option<String>,
@@ -58,7 +62,7 @@ pub enum Commands {
     },
     #[command(name = "export", about = "Export a public key (armored)")]
     Export {
-        #[arg(help = "Key ID to export")]
+        #[arg(help = "Key ID or user ID to export")]
         key_id: String,
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
