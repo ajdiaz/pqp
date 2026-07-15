@@ -11,6 +11,25 @@ fn read_passphrase(prompt: &str) -> Result<String> {
     rpassword::prompt_password(prompt).context("reading passphrase")
 }
 
+fn read_input(input: &Option<String>) -> Result<Vec<u8>> {
+    match input {
+        Some(path) if path != "-" => {
+            let mut file = std::fs::File::open(path).context(format!("opening {}", path))?;
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)
+                .context(format!("reading {}", path))?;
+            Ok(data)
+        }
+        _ => {
+            let mut data = Vec::new();
+            std::io::stdin()
+                .read_to_end(&mut data)
+                .context("reading from stdin")?;
+            Ok(data)
+        }
+    }
+}
+
 fn read_file(path: &str) -> Result<Vec<u8>> {
     let mut file = std::fs::File::open(path).context(format!("opening {}", path))?;
     let mut data = Vec::new();
@@ -75,7 +94,8 @@ fn main() -> Result<()> {
                 None
             };
 
-            let data = read_file(&input)?;
+            let data = read_input(&input)?;
+            let input_name = input.as_deref().unwrap_or("stdin");
 
             let (kem_pk, _) =
                 keyring::load_public_key(&recipient_id).context("loading recipient public key")?;
@@ -115,14 +135,15 @@ fn main() -> Result<()> {
             serialized.extend_from_slice(b"::");
             serialized.extend_from_slice(&encoded);
 
-            let out_path = output.unwrap_or_else(|| format!("{}.pqp.enc", input));
+            let out_path = output.unwrap_or_else(|| format!("{}.pqp.enc", input_name));
             write_file(&out_path, &serialized)?;
             println!("Encrypted: {}", out_path);
         }
         Commands::Decrypt { output, input } => {
             let passphrase = read_passphrase("Enter passphrase for secret key: ")?;
 
-            let data = read_file(&input)?;
+            let data = read_input(&input)?;
+            let input_name = input.as_deref().unwrap_or("stdin");
 
             let (_algorithms, payload) =
                 format::deserialize(&data).context("parsing encrypted file")?;
@@ -157,7 +178,7 @@ fn main() -> Result<()> {
             })?;
 
             let out_path = output.unwrap_or_else(|| {
-                let stripped = input.strip_suffix(".pqp.enc").unwrap_or(&input);
+                let stripped = input_name.strip_suffix(".pqp.enc").unwrap_or(input_name);
                 stripped.to_string()
             });
             write_file(&out_path, &plaintext)?;
@@ -170,7 +191,8 @@ fn main() -> Result<()> {
         } => {
             let user_id = keyring::resolve_key_id(&user).context("resolving signing key")?;
             let passphrase = read_passphrase("Enter passphrase for signing key: ")?;
-            let data = read_file(&input)?;
+            let data = read_input(&input)?;
+            let input_name = input.as_deref().unwrap_or("stdin");
 
             let (_, sign_sk) =
                 keyring::load_secret_key(&user_id, &passphrase).context("loading secret key")?;
@@ -199,13 +221,13 @@ fn main() -> Result<()> {
             serialized.extend_from_slice(b"::");
             serialized.extend_from_slice(&encoded);
 
-            let out_path = output.unwrap_or_else(|| format!("{}.pqp.sig", input));
+            let out_path = output.unwrap_or_else(|| format!("{}.pqp.sig", input_name));
             write_file(&out_path, &serialized)?;
             println!("Signed: {}", out_path);
         }
         Commands::Verify { signature, input } => {
             let sig_data = read_file(&signature)?;
-            let orig_data = read_file(&input)?;
+            let orig_data = read_input(&input)?;
 
             let (_algorithms, payload) =
                 format::deserialize(&sig_data).context("parsing signature file")?;
@@ -253,7 +275,8 @@ fn main() -> Result<()> {
             println!("Exported: {}", out_path);
         }
         Commands::Import { input } => {
-            let armored = std::fs::read_to_string(&input).context(format!("reading {}", input))?;
+            let data = read_input(&input)?;
+            let armored = String::from_utf8(data).context("import data is not valid UTF-8")?;
             let key_id = keyring::import_public_key(&armored)?;
             println!("Imported: key-id={}", key_id);
         }

@@ -22,8 +22,8 @@ pub enum Commands {
         recipient: String,
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
-        #[arg(help = "Input file path")]
-        input: String,
+        #[arg(help = "Input file path (omit or - for stdin)")]
+        input: Option<String>,
         #[arg(
             short = 's',
             long = "sign",
@@ -41,8 +41,8 @@ pub enum Commands {
     Decrypt {
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
-        #[arg(help = "Input file path")]
-        input: String,
+        #[arg(help = "Input file path (omit or - for stdin)")]
+        input: Option<String>,
     },
     #[command(name = "sign", about = "Sign a file")]
     Sign {
@@ -50,15 +50,15 @@ pub enum Commands {
         user: String,
         #[arg(short = 'o', long = "output", help = "Output signature file path")]
         output: Option<String>,
-        #[arg(help = "Input file path")]
-        input: String,
+        #[arg(help = "Input file path (omit or - for stdin)")]
+        input: Option<String>,
     },
     #[command(name = "verify", about = "Verify a signature")]
     Verify {
         #[arg(help = "Signature file path")]
         signature: String,
-        #[arg(help = "Original file path")]
-        input: String,
+        #[arg(help = "Original file path (omit or - for stdin)")]
+        input: Option<String>,
     },
     #[command(name = "export", about = "Export a public key (armored)")]
     Export {
@@ -69,7 +69,7 @@ pub enum Commands {
     },
     #[command(name = "import", about = "Import a public key (armored)")]
     Import {
-        #[arg(help = "Armored key file path")]
-        input: String,
+        #[arg(help = "Armored key file path (omit or - for stdin)")]
+        input: Option<String>,
     },
 }
