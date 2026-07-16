@@ -28,6 +28,18 @@ pub struct KeyMetadata {
     pub sign_algorithm: String,
 }
 
+/// Enriched key information including key type and algorithm details.
+#[derive(Debug, Serialize)]
+pub struct KeyInfo {
+    pub key_id: String,
+    pub user_id: String,
+    pub created_at: String,
+    pub has_public: bool,
+    pub has_secret: bool,
+    pub kem_algorithm: String,
+    pub sign_algorithm: String,
+}
+
 fn pqp_dir() -> Result<PathBuf> {
     let home = dirs::home_dir().context("cannot determine home directory")?;
     Ok(home.join(".pqp"))
@@ -107,7 +119,7 @@ pub fn resolve_key_id(identifier: &str) -> Result<String> {
     ))
 }
 
-pub fn list_keys() -> Result<Vec<KeyMetadata>> {
+pub fn list_keys() -> Result<Vec<KeyInfo>> {
     let dir = keys_dir()?;
     if !dir.exists() {
         return Ok(Vec::new());
@@ -122,7 +134,17 @@ pub fn list_keys() -> Result<Vec<KeyMetadata>> {
                 .context(format!("reading {}", conf_path.display()))?;
             let meta: KeyMetadata = serde_json::from_str(&content)
                 .context(format!("parsing {}", conf_path.display()))?;
-            keys.push(meta);
+            let has_public = entry.path().join("pqp-public.der").exists();
+            let has_secret = entry.path().join("pqp-secret.der").exists();
+            keys.push(KeyInfo {
+                key_id: meta.key_id,
+                user_id: meta.user_id,
+                created_at: meta.created_at,
+                has_public,
+                has_secret,
+                kem_algorithm: meta.kem_algorithm,
+                sign_algorithm: meta.sign_algorithm,
+            });
         }
     }
     keys.sort_by(|a, b| a.created_at.cmp(&b.created_at));

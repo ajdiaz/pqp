@@ -57,15 +57,61 @@ fn main() -> Result<()> {
             println!("  user-id: {}", meta.user_id);
             println!("  created: {}", meta.created_at);
         }
-        Commands::ListKeys => {
+        Commands::ListKeys { format } => {
             let keys = keyring::list_keys()?;
             if keys.is_empty() {
                 println!("No keys in keyring.");
             } else {
-                println!("Key ID        User ID               Created");
-                println!("{}", "-".repeat(55));
-                for key in &keys {
-                    println!("{:<14} {:<20} {}", key.key_id, key.user_id, key.created_at);
+                match format.as_str() {
+                    "json" => {
+                        let json = serde_json::to_string_pretty(&keys)?;
+                        println!("{json}");
+                    }
+                    "no-headers" | "noheader" | "no-head" => {
+                        for key in &keys {
+                            let kt = if key.has_secret && key.has_public {
+                                "pub+sec"
+                            } else if key.has_secret {
+                                "sec"
+                            } else {
+                                "pub"
+                            };
+                            println!(
+                                "{} {} {} {} {} {}",
+                                key.key_id,
+                                key.user_id,
+                                key.created_at,
+                                kt,
+                                key.kem_algorithm,
+                                key.sign_algorithm,
+                            );
+                        }
+                    }
+                    _ => {
+                        println!(
+                            "{:<14} {:<20} {:<26} {:<8} {:<14} {:<14}",
+                            "Key ID", "User ID", "Created", "Type", "KEM", "Sign"
+                        );
+                        println!("{}", "-".repeat(96));
+                        for key in &keys {
+                            let kt = if key.has_secret && key.has_public {
+                                "pub+sec"
+                            } else if key.has_secret {
+                                "sec"
+                            } else {
+                                "pub"
+                            };
+                            println!(
+                                "{:<14} {:<20} {:<26} {:<8} {:<14} {:<14}",
+                                key.key_id,
+                                key.user_id,
+                                key.created_at,
+                                kt,
+                                key.kem_algorithm,
+                                key.sign_algorithm,
+                            );
+                        }
+                    }
                 }
             }
         }

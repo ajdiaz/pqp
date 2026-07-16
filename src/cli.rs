@@ -14,8 +14,15 @@ pub enum Commands {
         #[arg(short = 'u', long = "user", help = "User ID for the key")]
         user: String,
     },
-    #[command(name = "list-keys", about = "List public keys in keyring")]
-    ListKeys,
+    #[command(name = "list-keys", about = "List keys in keyring")]
+    ListKeys {
+        #[arg(
+            long = "format",
+            default_value = "table",
+            help = "Output format: table, no-headers, json"
+        )]
+        format: String,
+    },
     #[command(name = "encrypt", about = "Encrypt a file for a recipient")]
     Encrypt {
         #[arg(short = 'r', long = "recipient", help = "Recipient key ID or user ID")]
