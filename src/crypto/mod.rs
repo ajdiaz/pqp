@@ -1,3 +1,11 @@
+//! Post-quantum cryptographic primitives.
+//!
+//! This module provides safe wrappers around:
+//! - [`kem`] — ML-KEM (Kyber) key encapsulation
+//! - [`sign`] — ML-DSA (Dilithium) digital signatures
+//! - [`sym`] — XChaCha20-Poly1305 symmetric encryption
+//! - [`keygen`] — Combined PQ key pair generation
+
 pub mod kem;
 pub mod keygen;
 pub mod sign;
@@ -5,6 +13,7 @@ pub mod sym;
 
 use thiserror::Error;
 
+/// Errors that can occur during cryptographic operations.
 #[derive(Error, Debug)]
 pub enum CryptoError {
     #[error("key generation failed: {0}")]

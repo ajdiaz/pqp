@@ -1,3 +1,16 @@
+//! Key store management in `~/.pqp/keys/`.
+//!
+//! Each key pair is stored in its own directory named by a 16-hex-char
+//! key ID. The directory contains:
+//! - `pqp-public.der` — plain public key bytes
+//! - `pqp-secret.der` — passphrase-encrypted secret key (Argon2id +
+//!   XChaCha20-Poly1305)
+//! - `pqp.conf` — JSON metadata (key ID, creation date, user ID)
+//!
+//! Identifier resolution ([`resolve_key_id`]) accepts either a key ID
+//! (directory name) or a user ID (from `pqp.conf` metadata) for all
+//! commands that take a key reference.
+
 use crate::armor;
 use crate::crypto::{keygen, sym};
 use anyhow::{Context, Result};
@@ -5,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use zeroize::Zeroize;
 
+/// Metadata for a key pair stored in the keyring.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeyMetadata {
     pub key_id: String,
@@ -201,6 +215,10 @@ pub fn load_public_key(key_id: &str) -> Result<(Vec<u8>, Vec<u8>)> {
     Ok((kem_pk, sign_pk))
 }
 
+/// Load and decrypt a secret key from the keyring.
+///
+/// Returns (kem_sk_bytes, sign_sk_bytes). The file format is:
+/// salt (16) || nonce (24) || XChaCha20-Poly1305 ciphertext.
 pub fn load_secret_key(key_id: &str, passphrase: &str) -> Result<(Vec<u8>, Vec<u8>)> {
     let dir = keys_dir()?.join(key_id);
     let secret_path = dir.join("pqp-secret.der");
@@ -235,6 +253,7 @@ pub fn load_secret_key(key_id: &str, passphrase: &str) -> Result<(Vec<u8>, Vec<u
     Ok((kem_sk, sign_sk))
 }
 
+/// Export a public key as an ASCII-armored string.
 pub fn export_public_key(key_id: &str) -> Result<String> {
     let dir = keys_dir()?.join(key_id);
     let public_bytes = std::fs::read(dir.join("pqp-public.der"))
@@ -244,6 +263,9 @@ pub fn export_public_key(key_id: &str) -> Result<String> {
     armor::armor(&public_bytes, &marker)
 }
 
+/// Import an ASCII-armored public key into the keyring.
+///
+/// Returns the imported key ID.
 pub fn import_public_key(armored: &str) -> Result<String> {
     let (marker, decoded) = armor::unarmor(armored)?;
 

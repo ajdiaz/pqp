@@ -1,13 +1,22 @@
+//! ML-KEM (CRYSTALS-Kyber) FIPS 203 key encapsulation.
+//!
+//! Uses ML-KEM-768 parameter set. Public keys are 1184 bytes,
+//! secret keys (seeds) are 64 bytes, ciphertexts are 1088 bytes,
+//! and shared secrets are 32 bytes.
+
 use super::CryptoError;
 use ml_kem::*;
 use zeroize::Zeroize;
 
+/// Length of the shared secret derived from encapsulation (32 bytes).
 pub const SHARED_SECRET_LEN: usize = 32;
 
+/// An ML-KEM public key (encapsulation key), 1184 bytes.
 pub struct PublicKey(Vec<u8>);
 
 #[allow(dead_code)]
 impl PublicKey {
+    /// Build a [`PublicKey`] from raw bytes, validating length.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let key_arr = <kem::Key<EncapsulationKey<MlKem768>>>::try_from(bytes)
             .map_err(|_| CryptoError::InvalidKey("invalid public key length".into()))?;
@@ -16,19 +25,23 @@ impl PublicKey {
         Ok(Self(bytes.to_vec()))
     }
 
+    /// View the raw public key bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
+    /// Clone the raw public key bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
 }
 
+/// An ML-KEM secret key (seed), 64 bytes. Zeroized on drop.
 pub struct SecretKey(Vec<u8>);
 
 #[allow(dead_code)]
 impl SecretKey {
+    /// Build a [`SecretKey`] from raw bytes, validating length.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         if bytes.len() != 64 {
             return Err(CryptoError::InvalidKey(
@@ -38,10 +51,13 @@ impl SecretKey {
         Ok(Self(bytes.to_vec()))
     }
 
+    /// View the raw secret key bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
+    /// Clone the raw secret key bytes.
+    /// Clone the raw secret key bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
@@ -53,6 +69,7 @@ impl Drop for SecretKey {
     }
 }
 
+/// Generate a new ML-KEM-768 keypair.
 pub fn keypair() -> Result<(SecretKey, PublicKey), CryptoError> {
     let (decap, encap) = MlKem768::generate_keypair();
 

@@ -7,6 +7,7 @@ pub struct PublicKey(Vec<u8>);
 
 #[allow(dead_code)]
 impl PublicKey {
+    /// Build a [`PublicKey`] from raw bytes, validating length.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let vk_arr = <Key<VerifyingKey<MlDsa65>>>::try_from(bytes)
             .map_err(|_| CryptoError::InvalidKey("invalid public key length".into()))?;
@@ -14,19 +15,23 @@ impl PublicKey {
         Ok(Self(bytes.to_vec()))
     }
 
+    /// View the raw public key bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
+    /// Clone the raw public key bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
 }
 
+/// An ML-DSA secret key (seed), 32 bytes. Zeroized on drop.
 pub struct SecretKey(Vec<u8>);
 
 #[allow(dead_code)]
 impl SecretKey {
+    /// Build a [`SecretKey`] from raw bytes, validating length.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         if bytes.len() != 32 {
             return Err(CryptoError::InvalidKey(
@@ -36,10 +41,12 @@ impl SecretKey {
         Ok(Self(bytes.to_vec()))
     }
 
+    /// View the raw secret key bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
+    /// Clone the raw secret key bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
@@ -51,6 +58,7 @@ impl Drop for SecretKey {
     }
 }
 
+/// Generate a new ML-DSA-65 keypair.
 pub fn keypair() -> Result<(SecretKey, PublicKey), CryptoError> {
     let signing_key = SigningKey::<MlDsa65>::generate();
     let verifying_key = signing_key.verifying_key();
@@ -61,6 +69,7 @@ pub fn keypair() -> Result<(SecretKey, PublicKey), CryptoError> {
     Ok((SecretKey(seed.to_vec()), PublicKey(vk_key.to_vec())))
 }
 
+/// Sign a message with an ML-DSA secret key.
 pub fn sign(sk: &SecretKey, message: &[u8]) -> Result<Vec<u8>, CryptoError> {
     let seed_arr = <Seed>::try_from(&sk.0[..32])
         .map_err(|_| CryptoError::Sign("invalid signing key seed".into()))?;
@@ -72,6 +81,7 @@ pub fn sign(sk: &SecretKey, message: &[u8]) -> Result<Vec<u8>, CryptoError> {
     Ok(sig_encoded.to_vec())
 }
 
+/// Verify a signature against a message using an ML-DSA public key.
 pub fn verify(pk: &PublicKey, message: &[u8], signature: &[u8]) -> Result<bool, CryptoError> {
     let vk_arr = <Key<VerifyingKey<MlDsa65>>>::try_from(&pk.0[..])
         .map_err(|_| CryptoError::Verify("invalid verifying key length".into()))?;

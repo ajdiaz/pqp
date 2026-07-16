@@ -1,7 +1,13 @@
+//! ASCII-armor encoding for public key export/import.
+//!
+//! Wraps base64-encoded data in `-----BEGIN <marker>-----` and
+//! `-----END <marker>-----` delimiters, with 64-char line wrapping.
+
 use anyhow::{Context, Result};
 
 const LINE_WIDTH: usize = 64;
 
+/// Encode binary data as an ASCII-armored string with the given marker.
 pub fn armor(data: &[u8], marker: &str) -> Result<String> {
     let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
 
@@ -17,6 +23,7 @@ pub fn armor(data: &[u8], marker: &str) -> Result<String> {
     Ok(result)
 }
 
+/// Decode an ASCII-armored string back into binary data, returning the marker and payload.
 pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>)> {
     let trimmed = armored.trim();
 

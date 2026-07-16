@@ -1,8 +1,16 @@
+//! File format for encrypted/signed payloads.
+//!
+//! All serialized payloads use the format `AlgorithmList::EncodedPayload`.
+//! The [`AlgorithmList`] describes which algorithms were applied (KEM,
+//! symmetric cipher, compression, encoding). The payload is processed
+//! in reverse order during encoding and forward during decoding.
+
 use anyhow::{Context, Result};
 use std::str::FromStr;
 
 const SEPARATOR: &str = "::";
 
+/// Canonical algorithm identifiers used in [`AlgorithmList`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Algorithm {
     MlKem,
@@ -18,6 +26,7 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
+    /// Return the canonical string name for this algorithm.
     pub fn canonical_name(&self) -> &'static str {
         match self {
             Algorithm::MlKem => "ML-KEM",
@@ -54,24 +63,33 @@ impl FromStr for Algorithm {
     }
 }
 
+/// Ordered list of algorithms applied to a payload.
+///
+/// The encoding algorithm always appears last in the list.
+/// Compression and encoding steps are applied inside-out during
+/// encoding and outside-in during decoding.
 #[derive(Debug, Clone)]
 pub struct AlgorithmList {
     algorithms: Vec<Algorithm>,
 }
 
 impl AlgorithmList {
+    /// Create a new algorithm list from the given algorithms in canonical order.
     pub fn new(algorithms: Vec<Algorithm>) -> Self {
         Self { algorithms }
     }
 
+    /// Return a slice of all algorithms in this list.
     pub fn algorithms(&self) -> &[Algorithm] {
         &self.algorithms
     }
 
+    /// Return the encoding algorithm (the last in the list), if any.
     pub fn encoding(&self) -> Option<&Algorithm> {
         self.algorithms.last()
     }
 
+    /// Parse a `+`-separated algorithm string into an [`AlgorithmList`].
     pub fn parse(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split('+').collect();
         if parts.is_empty() {
@@ -85,6 +103,7 @@ impl AlgorithmList {
     }
 }
 
+/// Parse a `+`-separated algorithm string.
 impl FromStr for AlgorithmList {
     type Err = anyhow::Error;
 
@@ -93,6 +112,7 @@ impl FromStr for AlgorithmList {
     }
 }
 
+/// Format as `+`-separated canonical names.
 impl std::fmt::Display for AlgorithmList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -249,6 +269,7 @@ fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     }
 }
 
+/// Compose a payload by applying all algorithms in the list.
 pub fn encode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let mut payload = data.to_vec();
 
@@ -272,6 +293,7 @@ pub fn encode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>
     Ok(payload)
 }
 
+/// Reverse the [`encode_payload`] transform to recover original data.
 pub fn decode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let encoding_alg = algorithms
         .encoding()
@@ -293,6 +315,7 @@ pub fn decode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>
     Ok(payload)
 }
 
+/// Encode and format as `AlgorithmList::EncodedPayload`.
 #[allow(dead_code)]
 pub fn serialize(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let encoded = encode_payload(algorithms, data)?;
@@ -303,6 +326,7 @@ pub fn serialize(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     Ok(result)
 }
 
+/// Parse `AlgorithmList::EncodedPayload` and return the algorithms and decoded payload.
 pub fn deserialize(data: &[u8]) -> Result<(AlgorithmList, Vec<u8>)> {
     let text = std::str::from_utf8(data).context("not valid UTF-8")?;
 
