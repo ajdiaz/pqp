@@ -5,6 +5,9 @@ all: build test clippy fmt
 build:
 	cargo build --release
 
+debug:
+	cargo build
+
 test:
 	cargo test -- --test-threads=1
 
