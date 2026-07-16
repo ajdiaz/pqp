@@ -58,47 +58,22 @@ fn timestamp_iso8601() -> String {
     )
 }
 
-fn days_to_date(mut days: u64) -> (u64, u64, u64) {
-    let y400 = 400 * 365 + 97;
-    let y100 = 100 * 365 + 24;
-    let y4 = 4 * 365 + 1;
-    let y1 = 365;
+fn days_to_date(days: u64) -> (u64, u64, u64) {
+    let z = days + 719468;
+    let era = z / 146097;
+    let doe = z % 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let (m, y) = if mp < 10 {
+        (mp + 3, y)
+    } else {
+        (mp - 9, y + 1)
+    };
 
-    let mut year = 0u64;
-
-    year += (days / y400) * 400;
-    days %= y400;
-
-    year += (days / y100) * 100;
-    days %= y100;
-
-    year += (days / y4) * 4;
-    days %= y4;
-
-    year += days / y1;
-    days %= y1;
-
-    let leap = is_leap_year(year);
-    if days >= 59 + leap as u64 {
-        days += 2 - leap as u64;
-    }
-
-    let month_days: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let mut month = 1u64;
-    for (i, &md) in month_days.iter().enumerate() {
-        if days < md {
-            month = i as u64 + 1;
-            break;
-        }
-        days -= md;
-    }
-    let day = days + 1;
-
-    (year, month, day)
-}
-
-fn is_leap_year(year: u64) -> bool {
-    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
+    (y, m, d)
 }
 
 pub fn resolve_key_id(identifier: &str) -> Result<String> {
