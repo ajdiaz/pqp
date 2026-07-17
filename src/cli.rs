@@ -78,5 +78,12 @@ pub enum Commands {
     Import {
         #[arg(help = "Armored key file path (omit or - for stdin)")]
         input: Option<String>,
+        #[arg(long = "url", help = "URL to fetch the armored key from")]
+        url: Option<String>,
+        #[arg(
+            long = "dont-ask-confirmation",
+            help = "Skip confirmation prompt before importing"
+        )]
+        dont_ask_confirmation: bool,
     },
 }

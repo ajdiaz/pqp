@@ -320,9 +320,41 @@ fn main() -> Result<()> {
             write_file(&out_path, armored.as_bytes())?;
             println!("Exported: {}", out_path);
         }
-        Commands::Import { input } => {
-            let data = read_input(&input)?;
-            let armored = String::from_utf8(data).context("import data is not valid UTF-8")?;
+        Commands::Import {
+            input,
+            url,
+            dont_ask_confirmation,
+        } => {
+            let armored = if let Some(url) = &url {
+                let response = ureq::get(url).call().context(format!("fetching {}", url))?;
+                response
+                    .into_body()
+                    .read_to_string()
+                    .context("reading response body")?
+            } else {
+                let data = read_input(&input)?;
+                String::from_utf8(data).context("import data is not valid UTF-8")?
+            };
+
+            let (marker, _) = pqp::armor::unarmor(&armored).context("invalid armored key data")?;
+            let import_key_id = marker
+                .strip_prefix("PQP PUBLIC KEY ")
+                .unwrap_or(&marker)
+                .to_string();
+
+            if !dont_ask_confirmation {
+                eprint!("Import key {}? [y/N] ", import_key_id);
+                let mut answer = String::new();
+                std::io::stdin()
+                    .read_line(&mut answer)
+                    .context("reading confirmation")?;
+                let answer = answer.trim().to_lowercase();
+                if answer != "y" && answer != "yes" {
+                    println!("Import cancelled.");
+                    return Ok(());
+                }
+            }
+
             let key_id = keyring::import_public_key(&armored)?;
             println!("Imported: key-id={}", key_id);
         }
