@@ -4,11 +4,51 @@ use pqp::cli::{Cli, Commands};
 use pqp::crypto::sign;
 use pqp::crypto::sym;
 use pqp::{crypto, format, keyring};
-use std::io::Read;
+use std::io::{Read, Write};
 use zeroize::Zeroize;
 
 fn read_passphrase(prompt: &str) -> Result<String> {
-    rpassword::prompt_password(prompt).context("reading passphrase")
+    let result = rpassword::prompt_password(prompt);
+    match result {
+        Ok(p) => Ok(p),
+        Err(_e) => {
+            eprint!("{}", prompt);
+            let mut pass = String::new();
+            std::io::stdin().read_line(&mut pass)?;
+            if pass.ends_with('\n') {
+                pass.pop();
+                if pass.ends_with('\r') {
+                    pass.pop();
+                }
+            }
+            Ok(pass)
+        }
+    }
+}
+
+fn confirm_import(key_id: &str) -> Result<bool> {
+    let prompt = format!("Import key {}? [y/N] ", key_id);
+    #[cfg(unix)]
+    {
+        let mut tty = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .context("opening /dev/tty for confirmation")?;
+        tty.write_all(prompt.as_bytes())?;
+        let mut answer = String::new();
+        tty.read_to_string(&mut answer)?;
+        let answer = answer.trim().to_lowercase();
+        Ok(answer == "y" || answer == "yes")
+    }
+    #[cfg(not(unix))]
+    {
+        eprint!("{}", prompt);
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer)?;
+        let answer = answer.trim().to_lowercase();
+        Ok(answer == "y" || answer == "yes")
+    }
 }
 
 fn read_input(input: &Option<String>) -> Result<Vec<u8>> {
@@ -342,17 +382,9 @@ fn main() -> Result<()> {
                 .unwrap_or(&marker)
                 .to_string();
 
-            if !dont_ask_confirmation {
-                eprint!("Import key {}? [y/N] ", import_key_id);
-                let mut answer = String::new();
-                std::io::stdin()
-                    .read_line(&mut answer)
-                    .context("reading confirmation")?;
-                let answer = answer.trim().to_lowercase();
-                if answer != "y" && answer != "yes" {
-                    println!("Import cancelled.");
-                    return Ok(());
-                }
+            if !dont_ask_confirmation && !confirm_import(&import_key_id)? {
+                println!("Import cancelled.");
+                return Ok(());
             }
 
             let key_id = keyring::import_public_key(&armored)?;
