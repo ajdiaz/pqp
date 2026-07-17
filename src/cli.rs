@@ -52,6 +52,8 @@ pub enum Commands {
         output: Option<String>,
         #[arg(help = "Input file path (omit or - for stdin)")]
         input: Option<String>,
+        #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
+        no_passphrase: bool,
     },
     #[command(name = "sign", about = "Sign a file")]
     Sign {
@@ -61,6 +63,8 @@ pub enum Commands {
         output: Option<String>,
         #[arg(help = "Input file path (omit or - for stdin)")]
         input: Option<String>,
+        #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
+        no_passphrase: bool,
     },
     #[command(name = "verify", about = "Verify a signature")]
     Verify {

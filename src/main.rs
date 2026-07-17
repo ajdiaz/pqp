@@ -233,8 +233,16 @@ fn main() -> Result<()> {
             write_file(&out_path, &serialized)?;
             println!("Encrypted: {}", out_path);
         }
-        Commands::Decrypt { output, input } => {
-            let passphrase = read_passphrase("Enter passphrase for secret key: ")?;
+        Commands::Decrypt {
+            output,
+            input,
+            no_passphrase,
+        } => {
+            let passphrase = if no_passphrase {
+                String::new()
+            } else {
+                read_passphrase("Enter passphrase for secret key: ")?
+            };
 
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
@@ -282,9 +290,14 @@ fn main() -> Result<()> {
             user,
             output,
             input,
+            no_passphrase,
         } => {
             let user_id = keyring::resolve_key_id(&user).context("resolving signing key")?;
-            let passphrase = read_passphrase("Enter passphrase for signing key: ")?;
+            let passphrase = if no_passphrase {
+                String::new()
+            } else {
+                read_passphrase("Enter passphrase for signing key: ")?
+            };
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 

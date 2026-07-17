@@ -441,21 +441,22 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
     );
 
     let dec_path = outdir.join("data.txt");
-    let mut child = std::process::Command::new(pqp_binary())
+    let output = std::process::Command::new(pqp_binary())
         .args([
             "decrypt",
+            "--no-passphrase",
             "-o",
             &dec_path.to_string_lossy(),
             &enc_path.to_string_lossy(),
         ])
         .env("HOME", &home)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child.stdin.take().unwrap().write_all(b"\n").unwrap();
-    let out = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "decrypt with nopass key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
         out.status.success(),
         "decrypt with nopass key failed: {}",
