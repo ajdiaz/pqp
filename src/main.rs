@@ -89,10 +89,10 @@ fn main() -> Result<()> {
                     }
                     _ => {
                         println!(
-                            "{:<14} {:<20} {:<26} {:<8} {:<14} {:<14}",
+                            "{:<16} {:<20} {:<26} {:<8} {:<14} {:<14}",
                             "Key ID", "User ID", "Created", "Type", "KEM", "Sign"
                         );
-                        println!("{}", "-".repeat(96));
+                        println!("{}", "-".repeat(98));
                         for key in &keys {
                             let kt = if key.has_secret && key.has_public {
                                 "pub+sec"
@@ -102,7 +102,7 @@ fn main() -> Result<()> {
                                 "pub"
                             };
                             println!(
-                                "{:<14} {:<20} {:<26} {:<8} {:<14} {:<14}",
+                                "{:<16} {:<20} {:<26} {:<8} {:<14} {:<14}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
