@@ -13,6 +13,8 @@ pub enum Commands {
     GenKey {
         #[arg(short = 'u', long = "user", help = "User ID for the key")]
         user: String,
+        #[arg(long = "no-passphrase", help = "Generate key without a passphrase")]
+        no_passphrase: bool,
     },
     #[command(name = "list-keys", about = "List keys in keyring")]
     ListKeys {

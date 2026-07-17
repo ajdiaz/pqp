@@ -86,12 +86,20 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::GenKey { user } => {
-            let passphrase = read_passphrase("Enter passphrase for new key: ")?;
-            let passphrase2 = read_passphrase("Confirm passphrase: ")?;
-            if passphrase != passphrase2 {
-                return Err(anyhow::anyhow!("passphrases do not match"));
-            }
+        Commands::GenKey {
+            user,
+            no_passphrase,
+        } => {
+            let passphrase = if no_passphrase {
+                String::new()
+            } else {
+                let passphrase = read_passphrase("Enter passphrase for new key: ")?;
+                let passphrase2 = read_passphrase("Confirm passphrase: ")?;
+                if passphrase != passphrase2 {
+                    return Err(anyhow::anyhow!("passphrases do not match"));
+                }
+                passphrase
+            };
             let meta = keyring::generate_key(&user, &passphrase)?;
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);

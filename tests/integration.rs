@@ -354,3 +354,116 @@ fn test_cli_sign_verify_stdin() {
 
     let _ = std::fs::remove_dir_all(&outdir);
 }
+
+#[test]
+fn test_gen_key_no_passphrase() {
+    let meta = pqp::keyring::generate_key("nopass@example.com", "").unwrap();
+    assert_eq!(meta.user_id, "nopass@example.com");
+    let (_kem_sk, _sign_sk) = pqp::keyring::load_secret_key(&meta.key_id, "").unwrap();
+}
+
+#[test]
+fn test_cli_gen_key_no_passphrase() {
+    let outdir = std::env::temp_dir().join("pqp_cli_gen_nopass");
+    let _ = std::fs::remove_dir_all(&outdir);
+    std::fs::create_dir_all(&outdir).unwrap();
+    let home = outdir.to_string_lossy().to_string();
+
+    let output = std::process::Command::new(pqp_binary())
+        .args(["gen-key", "-u", "cli-nopass@example.com", "--no-passphrase"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key --no-passphrase failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("cli-nopass@example.com"));
+
+    let output = std::process::Command::new(pqp_binary())
+        .args(["list-keys", "--format", "no-headers"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("cli-nopass@example.com"));
+
+    let _ = std::fs::remove_dir_all(&outdir);
+}
+
+#[test]
+fn test_cli_encrypt_decrypt_no_passphrase_key() {
+    let outdir = std::env::temp_dir().join("pqp_enc_nopass");
+    let _ = std::fs::remove_dir_all(&outdir);
+    std::fs::create_dir_all(&outdir).unwrap();
+    let home = outdir.to_string_lossy().to_string();
+
+    let output = std::process::Command::new(pqp_binary())
+        .args(["gen-key", "-u", "enc-nopass@example.com", "--no-passphrase"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+
+    let output = std::process::Command::new(pqp_binary())
+        .args(["list-keys", "--format", "no-headers"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let key_id = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+
+    let enc_path = outdir.join("data.txt.pqp.enc");
+    let mut child = std::process::Command::new(pqp_binary())
+        .args(["encrypt", "-r", &key_id, "-o", &enc_path.to_string_lossy()])
+        .env("HOME", &home)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"data with no passphrase")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "encrypt with nopass key failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let dec_path = outdir.join("data.txt");
+    let mut child = std::process::Command::new(pqp_binary())
+        .args([
+            "decrypt",
+            "-o",
+            &dec_path.to_string_lossy(),
+            &enc_path.to_string_lossy(),
+        ])
+        .env("HOME", &home)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "decrypt with nopass key failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let decrypted = std::fs::read_to_string(&dec_path).unwrap();
+    assert_eq!(decrypted, "data with no passphrase");
+
+    let _ = std::fs::remove_dir_all(&outdir);
+}
