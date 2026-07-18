@@ -226,7 +226,7 @@ fn test_keygen_produces_valid_keys() {
 
 #[test]
 fn test_cli_encrypt_decrypt_stdin() {
-    let meta = pqp::keyring::generate_key("stdin-test@example.com", "testpass").unwrap();
+    let meta = pqp::keyring::generate_key("stdin-test@example.com", "").unwrap();
 
     let outdir = std::env::temp_dir().join(format!("pqp_stdin_{}", meta.key_id));
     let _ = std::fs::remove_dir_all(&outdir);
@@ -261,30 +261,21 @@ fn test_cli_encrypt_decrypt_stdin() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let mut child = std::process::Command::new(pqp_binary())
+    let output = std::process::Command::new(pqp_binary())
         .args([
             "decrypt",
+            "--no-passphrase",
             "-o",
             &dec_path.to_string_lossy(),
             &enc_path.to_string_lossy(),
         ])
         .env_remove("HOME")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"testpass\n")
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
     assert!(
-        out.status.success(),
+        output.status.success(),
         "decrypt failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        String::from_utf8_lossy(&output.stderr)
     );
 
     let decrypted = std::fs::read_to_string(&dec_path).unwrap();
@@ -294,7 +285,7 @@ fn test_cli_encrypt_decrypt_stdin() {
 
 #[test]
 fn test_cli_sign_verify_stdin() {
-    let meta = pqp::keyring::generate_key("sign-stdin@example.com", "testpass").unwrap();
+    let meta = pqp::keyring::generate_key("sign-stdin@example.com", "").unwrap();
 
     let outdir = std::env::temp_dir().join(format!("pqp_sign_stdin_{}", meta.key_id));
     let _ = std::fs::remove_dir_all(&outdir);
@@ -303,54 +294,40 @@ fn test_cli_sign_verify_stdin() {
     let data_path = outdir.join("msg.txt");
     std::fs::write(&data_path, b"sign me via stdin").unwrap();
 
-    let mut child = std::process::Command::new(pqp_binary())
+    let output = std::process::Command::new(pqp_binary())
         .args([
             "sign",
             "-u",
             &meta.key_id,
+            "--no-passphrase",
             "-o",
             &sig_path.to_string_lossy(),
             &data_path.to_string_lossy(),
         ])
         .env_remove("HOME")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"testpass\n")
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
     assert!(
-        out.status.success(),
-        "sign stdin failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        output.status.success(),
+        "sign failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
 
-    let mut child = std::process::Command::new(pqp_binary())
+    let output = std::process::Command::new(pqp_binary())
         .args([
             "verify",
             &sig_path.to_string_lossy(),
             &data_path.to_string_lossy(),
         ])
         .env_remove("HOME")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child.stdin.take().unwrap().write_all(b"dummy\n").unwrap();
-    let out = child.wait_with_output().unwrap();
     assert!(
-        out.status.success(),
-        "verify stdin failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        output.status.success(),
+        "verify failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&out.stdout).contains("Verified"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Verified"));
 
     let _ = std::fs::remove_dir_all(&outdir);
 }
