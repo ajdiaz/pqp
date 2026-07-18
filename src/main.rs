@@ -136,11 +136,25 @@ fn main() -> Result<()> {
                         }
                     }
                     _ => {
+                        let uid_width = keys
+                            .iter()
+                            .map(|k| k.user_id.len())
+                            .chain(std::iter::once("User ID".len()))
+                            .max()
+                            .unwrap_or(20)
+                            .max(8);
+                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14;
                         println!(
-                            "{:<16} {:<20} {:<26} {:<8} {:<14} {:<14}",
-                            "Key ID", "User ID", "Created", "Type", "KEM", "Sign"
+                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14}",
+                            "Key ID",
+                            "User ID",
+                            "Created",
+                            "Type",
+                            "KEM",
+                            "Sign",
+                            uid_w = uid_width,
                         );
-                        println!("{}", "-".repeat(98));
+                        println!("{}", "-".repeat(total));
                         for key in &keys {
                             let kt = if key.has_secret && key.has_public {
                                 "pub+sec"
@@ -150,13 +164,14 @@ fn main() -> Result<()> {
                                 "pub"
                             };
                             println!(
-                                "{:<16} {:<20} {:<26} {:<8} {:<14} {:<14}",
+                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
                                 kt,
                                 key.kem_algorithm,
                                 key.sign_algorithm,
+                                uid_w = uid_width,
                             );
                         }
                     }
