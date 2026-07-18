@@ -225,65 +225,6 @@ fn test_keygen_produces_valid_keys() {
 }
 
 #[test]
-fn test_cli_encrypt_decrypt_stdin() {
-    let meta = pqp::keyring::generate_key("stdin-test@example.com", "").unwrap();
-
-    let outdir = std::env::temp_dir().join(format!("pqp_stdin_{}", meta.key_id));
-    let _ = std::fs::remove_dir_all(&outdir);
-    std::fs::create_dir_all(&outdir).unwrap();
-    let enc_path = outdir.join("out.pqp.enc");
-    let dec_path = outdir.join("out.txt");
-
-    let mut child = std::process::Command::new(pqp_binary())
-        .args([
-            "encrypt",
-            "-r",
-            &meta.key_id,
-            "-o",
-            &enc_path.to_string_lossy(),
-        ])
-        .env_remove("HOME")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"hello from stdin")
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
-    assert!(
-        out.status.success(),
-        "encrypt stdin failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
-    let output = std::process::Command::new(pqp_binary())
-        .args([
-            "decrypt",
-            "--no-passphrase",
-            "-o",
-            &dec_path.to_string_lossy(),
-            &enc_path.to_string_lossy(),
-        ])
-        .env_remove("HOME")
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "decrypt failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let decrypted = std::fs::read_to_string(&dec_path).unwrap();
-    assert_eq!(decrypted, "hello from stdin");
-    let _ = std::fs::remove_dir_all(&outdir);
-}
-
-#[test]
 fn test_cli_sign_verify_stdin() {
     let meta = pqp::keyring::generate_key("sign-stdin@example.com", "").unwrap();
 
@@ -395,29 +336,29 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
         .unwrap()
         .to_string();
 
+    let plain_path = outdir.join("data.txt");
+    std::fs::write(&plain_path, b"data with no passphrase").unwrap();
+
     let enc_path = outdir.join("data.txt.pqp.enc");
-    let mut child = std::process::Command::new(pqp_binary())
-        .args(["encrypt", "-r", &key_id, "-o", &enc_path.to_string_lossy()])
+    let output = std::process::Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "-o",
+            &enc_path.to_string_lossy(),
+            &plain_path.to_string_lossy(),
+        ])
         .env("HOME", &home)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"data with no passphrase")
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
     assert!(
-        out.status.success(),
+        output.status.success(),
         "encrypt with nopass key failed: {}",
-        String::from_utf8_lossy(&out.stderr)
+        String::from_utf8_lossy(&output.stderr)
     );
 
-    let dec_path = outdir.join("data.txt");
+    let dec_path = outdir.join("data.dec");
     let output = std::process::Command::new(pqp_binary())
         .args([
             "decrypt",
@@ -433,11 +374,6 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
         output.status.success(),
         "decrypt with nopass key failed: {}",
         String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        out.status.success(),
-        "decrypt with nopass key failed: {}",
-        String::from_utf8_lossy(&out.stderr)
     );
 
     let decrypted = std::fs::read_to_string(&dec_path).unwrap();

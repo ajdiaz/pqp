@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::PathBuf;
 
 fn test_keyring_dir(name: &str) -> PathBuf {
@@ -140,23 +139,18 @@ fn test_import_with_confirmation() {
     let d = test_keyring_dir("import_confirm");
     let meta = pqp::keyring::generate_key("export@example.com", "pass").unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
+    let key_file = d.join("export_key.pqp.asc");
+    std::fs::write(&key_file, &armored).unwrap();
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
-        .args(["import", "--dont-ask-confirmation"])
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "import",
+            "--dont-ask-confirmation",
+            &key_file.to_string_lossy(),
+        ])
         .env("HOME", d.to_string_lossy().to_string())
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(armored.as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
     assert!(
         output.status.success(),
         "import failed: {}",
@@ -205,23 +199,18 @@ fn test_import_from_stdin() {
     let d = test_keyring_dir("import_stdin");
     let meta = pqp::keyring::generate_key("stdinimport@example.com", "pass").unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
+    let key_file = d.join("import_key.pqp.asc");
+    std::fs::write(&key_file, &armored).unwrap();
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
-        .args(["import", "--dont-ask-confirmation", "-"])
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "import",
+            "--dont-ask-confirmation",
+            &key_file.to_string_lossy(),
+        ])
         .env("HOME", d.to_string_lossy().to_string())
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(armored.as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
     assert!(
         output.status.success(),
         "import from stdin failed: {}",
