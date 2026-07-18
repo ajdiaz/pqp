@@ -1,3 +1,8 @@
+//! Binary entry point for the `pqp` CLI tool.
+//!
+//! Parses command-line arguments via [`cli`](pqp::cli), dispatches to
+//! the appropriate handler, and manages keyring, crypto, and I/O.
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use pqp::cli::{Cli, Commands};

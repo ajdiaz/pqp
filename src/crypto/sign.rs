@@ -1,3 +1,8 @@
+//! ML-DSA (CRYSTALS-Dilithium) FIPS 204 digital signatures.
+//!
+//! Uses ML-DSA-65 (security level 3). Public keys are 1952 bytes,
+//! secret keys (seeds) are 32 bytes, and signatures are 3290 bytes.
+
 use super::CryptoError;
 use ml_dsa::common::Key;
 use ml_dsa::*;

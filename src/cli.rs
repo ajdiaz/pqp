@@ -1,5 +1,12 @@
+//! CLI interface definitions using `clap`.
+//!
+//! Defines the [`Cli`] entry point and [`Commands`] enum with all
+//! subcommands. This module is purely structural — command dispatch
+//! and business logic live in `src/main.rs`.
+
 use clap::{Parser, Subcommand};
 
+/// Top-level CLI structure for the `pqp` binary.
 #[derive(Parser)]
 #[command(name = "pqp", about = "Quantum-Resistant GPG Emulation")]
 pub struct Cli {
@@ -7,16 +14,19 @@ pub struct Cli {
     pub command: Commands,
 }
 
+/// All subcommands supported by `pqp`.
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(name = "gen-key", about = "Generate a PQ key pair (Kyber + Dilithium)")]
+    /// Generate a PQ key pair (Kyber + Dilithium).
+    #[command(name = "gen-key")]
     GenKey {
         #[arg(short = 'u', long = "user", help = "User ID for the key")]
         user: String,
         #[arg(long = "no-passphrase", help = "Generate key without a passphrase")]
         no_passphrase: bool,
     },
-    #[command(name = "list-keys", about = "List keys in keyring")]
+    /// List keys in the keyring.
+    #[command(name = "list-keys")]
     ListKeys {
         #[arg(
             long = "format",
@@ -25,7 +35,8 @@ pub enum Commands {
         )]
         format: String,
     },
-    #[command(name = "encrypt", about = "Encrypt a file for a recipient")]
+    /// Encrypt a file for a recipient.
+    #[command(name = "encrypt")]
     Encrypt {
         #[arg(short = 'r', long = "recipient", help = "Recipient key ID or user ID")]
         recipient: String,
@@ -46,7 +57,8 @@ pub enum Commands {
         )]
         signer: Option<String>,
     },
-    #[command(name = "decrypt", about = "Decrypt a file")]
+    /// Decrypt a file.
+    #[command(name = "decrypt")]
     Decrypt {
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
@@ -55,7 +67,8 @@ pub enum Commands {
         #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
         no_passphrase: bool,
     },
-    #[command(name = "sign", about = "Sign a file")]
+    /// Sign a file with a private key.
+    #[command(name = "sign")]
     Sign {
         #[arg(short = 'u', long = "user", help = "Signing key ID or user ID")]
         user: String,
@@ -66,21 +79,24 @@ pub enum Commands {
         #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
         no_passphrase: bool,
     },
-    #[command(name = "verify", about = "Verify a signature")]
+    /// Verify a signature.
+    #[command(name = "verify")]
     Verify {
         #[arg(help = "Signature file path")]
         signature: String,
         #[arg(help = "Original file path (omit or - for stdin)")]
         input: Option<String>,
     },
-    #[command(name = "export", about = "Export a public key (armored)")]
+    /// Export a public key (armored).
+    #[command(name = "export")]
     Export {
         #[arg(help = "Key ID or user ID to export")]
         key_id: String,
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
     },
-    #[command(name = "import", about = "Import a public key (armored)")]
+    /// Import a public key (armored).
+    #[command(name = "import")]
     Import {
         #[arg(help = "Armored key file path (omit or - for stdin)")]
         input: Option<String>,
