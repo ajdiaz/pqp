@@ -364,6 +364,88 @@ pub fn import_public_key(armored: &str) -> Result<String> {
     Ok(key_id)
 }
 
+/// Resolve an identifier to all matching key IDs.
+///
+/// If `identifier` is a key ID (directory name), returns a single-element
+/// vector. Otherwise, finds all keys whose `user_id` matches.
+pub fn resolve_key_ids(identifier: &str) -> Result<Vec<String>> {
+    let dir = keys_dir()?;
+    if !dir.exists() {
+        return Err(anyhow::anyhow!("key not found: {}", identifier));
+    }
+
+    let key_dir = dir.join(identifier);
+    if key_dir.is_dir() && key_dir.join("pqp.conf").exists() {
+        return Ok(vec![identifier.to_string()]);
+    }
+
+    let mut matches = Vec::new();
+    for entry in std::fs::read_dir(&dir).context("reading keys directory")? {
+        let entry = entry?;
+        let conf_path = entry.path().join("pqp.conf");
+        if conf_path.exists() {
+            let content = std::fs::read_to_string(&conf_path)
+                .context(format!("reading {}", conf_path.display()))?;
+            let meta: KeyMetadata = serde_json::from_str(&content)
+                .context(format!("parsing {}", conf_path.display()))?;
+            if meta.user_id == identifier {
+                matches.push(meta.key_id);
+            }
+        }
+    }
+
+    if matches.is_empty() {
+        return Err(anyhow::anyhow!("key not found: {}", identifier));
+    }
+
+    Ok(matches)
+}
+
+/// Remove a key from the keyring by key ID.
+///
+/// Always removes the public key and metadata. If `remove_private` is
+/// `true`, also removes the secret key. Only removes the key directory
+/// if it becomes empty after file removal.
+pub fn remove_key(key_id: &str, remove_private: bool) -> Result<()> {
+    let dir = keys_dir()?.join(key_id);
+
+    if !dir.exists() {
+        return Err(anyhow::anyhow!(
+            "key directory not found: {}",
+            dir.display()
+        ));
+    }
+
+    let pub_path = dir.join("pqp-public.der");
+    if pub_path.exists() {
+        std::fs::remove_file(&pub_path).context(format!("removing {}", pub_path.display()))?;
+    }
+
+    if remove_private {
+        let sec_path = dir.join("pqp-secret.der");
+        if sec_path.exists() {
+            std::fs::remove_file(&sec_path).context(format!("removing {}", sec_path.display()))?;
+        }
+    }
+
+    let conf_path = dir.join("pqp.conf");
+    if conf_path.exists() {
+        std::fs::remove_file(&conf_path).context(format!("removing {}", conf_path.display()))?;
+    }
+
+    // Only remove directory if it's now empty
+    if dir.exists()
+        && dir
+            .read_dir()
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(false)
+    {
+        std::fs::remove_dir(&dir).context(format!("removing directory {}", dir.display()))?;
+    }
+
+    Ok(())
+}
+
 fn generate_key_id() -> Result<String> {
     let mut buf = [0u8; 8];
     use rand::RngCore;

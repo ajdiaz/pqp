@@ -214,6 +214,222 @@ fn test_import_with_confirmation() {
 }
 
 #[test]
+fn test_remove_key_public_only() {
+    let _d = test_keyring_dir("remove_pub");
+    let meta = pqp::keyring::generate_key(
+        "remove-pub@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    let key_id = meta.key_id.clone();
+
+    assert!(pqp::keyring::list_keys().unwrap().len() == 1);
+
+    pqp::keyring::remove_key(&key_id, false).unwrap();
+
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert!(keys.is_empty(), "key should be removed from listing");
+
+    // Secret file remains but no public + conf, so list_keys won't find it
+    let dir = PathBuf::from(std::env::var("HOME").unwrap())
+        .join(".pqp")
+        .join("keys")
+        .join(&key_id);
+    assert!(
+        dir.join("pqp-secret.der").exists(),
+        "secret key should remain"
+    );
+}
+
+#[test]
+fn test_remove_key_public_and_private() {
+    let _d = test_keyring_dir("remove_both");
+    let meta = pqp::keyring::generate_key(
+        "remove-both@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    let key_id = meta.key_id.clone();
+
+    pqp::keyring::remove_key(&key_id, true).unwrap();
+
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert!(keys.is_empty(), "key should be removed completely");
+
+    let dir = PathBuf::from(std::env::var("HOME").unwrap())
+        .join(".pqp")
+        .join("keys")
+        .join(&key_id);
+    assert!(!dir.exists(), "key directory should be removed");
+}
+
+#[test]
+fn test_remove_key_nonexistent() {
+    let _d = test_keyring_dir("remove_nonexistent");
+    let result = pqp::keyring::remove_key("nonexistent-key-id", false);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_resolve_key_ids_by_key_id() {
+    let _d = test_keyring_dir("res_ids_id");
+    let meta = pqp::keyring::generate_key(
+        "resolve-ids@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let ids = pqp::keyring::resolve_key_ids(&meta.key_id).unwrap();
+    assert_eq!(ids, vec![meta.key_id]);
+}
+
+#[test]
+fn test_resolve_key_ids_by_user_id() {
+    let _d = test_keyring_dir("res_ids_user");
+    pqp::keyring::generate_key(
+        "multi@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    pqp::keyring::generate_key(
+        "multi@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let ids = pqp::keyring::resolve_key_ids("multi@example.com").unwrap();
+    assert_eq!(ids.len(), 2, "should find both keys with same user ID");
+    assert_ne!(ids[0], ids[1], "key IDs should be different");
+}
+
+#[test]
+fn test_resolve_key_ids_not_found() {
+    let _d = test_keyring_dir("res_ids_nf");
+    let result = pqp::keyring::resolve_key_ids("nonexistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_cli_remove_key_public_only() {
+    let d = test_keyring_dir("cli_remove_pub");
+    let meta = pqp::keyring::generate_key(
+        "cli-remove-pub@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    let key_id = meta.key_id.clone();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args(["remove-key", "--dont-ask", &key_id])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "remove-key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert!(keys.is_empty(), "key should be removed via CLI");
+}
+
+#[test]
+fn test_cli_remove_key_public_and_private() {
+    let d = test_keyring_dir("cli_remove_both");
+    let meta = pqp::keyring::generate_key(
+        "cli-remove-both@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    let key_id = meta.key_id.clone();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args(["remove-key", "--dont-ask", "--remove-private-key", &key_id])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "remove-key with private failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert!(keys.is_empty(), "key should be removed completely via CLI");
+}
+
+#[test]
+fn test_cli_remove_key_by_user_id() {
+    let d = test_keyring_dir("cli_remove_user");
+    pqp::keyring::generate_key(
+        "remove-by-user@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+    pqp::keyring::generate_key(
+        "remove-by-user@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    assert_eq!(pqp::keyring::list_keys().unwrap().len(), 2);
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args(["remove-key", "--dont-ask", "remove-by-user@example.com"])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "remove-key by user ID failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert!(keys.is_empty(), "all keys for user ID should be removed");
+}
+
+#[test]
+fn test_cli_remove_key_not_found() {
+    let d = test_keyring_dir("cli_remove_nf");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args(["remove-key", "--dont-ask", "nonexistent-key"])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not found"));
+}
+
+#[test]
 fn test_list_keys_json_format() {
     let d = test_keyring_dir("list_json");
     pqp::keyring::generate_key(

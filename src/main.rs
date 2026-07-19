@@ -464,6 +464,55 @@ fn main() -> Result<()> {
                 ));
             }
         }
+        Commands::RemoveKey {
+            key_id,
+            dont_ask,
+            remove_private_key,
+        } => {
+            let key_ids = keyring::resolve_key_ids(&key_id)?;
+
+            for kid in &key_ids {
+                let meta = keyring::read_metadata(kid)?;
+                if !dont_ask {
+                    let prompt = format!("Remove key {} (user: {})? [y/N] ", kid, meta.user_id);
+                    #[cfg(unix)]
+                    {
+                        let mut tty = std::fs::OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .open("/dev/tty")
+                            .context("opening /dev/tty for confirmation")?;
+                        tty.write_all(prompt.as_bytes())?;
+                        let mut answer = String::new();
+                        tty.read_to_string(&mut answer)?;
+                        let answer = answer.trim().to_lowercase();
+                        if answer != "y" && answer != "yes" {
+                            println!("Skipped key {}.", kid);
+                            continue;
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        eprint!("{}", prompt);
+                        let mut answer = String::new();
+                        std::io::stdin().read_line(&mut answer)?;
+                        let answer = answer.trim().to_lowercase();
+                        if answer != "y" && answer != "yes" {
+                            println!("Skipped key {}.", kid);
+                            continue;
+                        }
+                    }
+                }
+
+                keyring::remove_key(kid, remove_private_key)?;
+                let removed = if remove_private_key {
+                    "public and private"
+                } else {
+                    "public"
+                };
+                println!("Removed {} key {}/{}", removed, kid, meta.user_id);
+            }
+        }
         Commands::Export { key_id, output } => {
             let resolved_id = keyring::resolve_key_id(&key_id)?;
             let armored = keyring::export_public_key(&resolved_id)?;

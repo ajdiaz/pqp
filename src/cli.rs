@@ -119,6 +119,19 @@ pub enum Commands {
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
     },
+    /// Remove a public key (and optionally private key) from the keyring.
+    #[command(name = "remove-key")]
+    RemoveKey {
+        #[arg(help = "Key ID or user ID to remove")]
+        key_id: String,
+        #[arg(long = "dont-ask", help = "Skip confirmation prompt before removing")]
+        dont_ask: bool,
+        #[arg(
+            long = "remove-private-key",
+            help = "Also remove the private key if it exists"
+        )]
+        remove_private_key: bool,
+    },
     /// Import a public key (armored).
     #[command(name = "import")]
     Import {
