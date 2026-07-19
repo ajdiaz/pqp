@@ -71,27 +71,65 @@ fn test_format_ascii85_roundtrip() {
 }
 
 #[test]
-fn test_format_zstd_roundtrip() {
-    let algorithms = pqp::format::AlgorithmList::new(vec![
-        pqp::format::Algorithm::Zstd,
-        pqp::format::Algorithm::Base64,
-    ]);
+fn test_compress_decompress_zstd() {
     let data = vec![42u8; 1024];
-    let encoded = pqp::format::encode_payload(&algorithms, &data).unwrap();
-    let decoded = pqp::format::decode_payload(&algorithms, &encoded).unwrap();
-    assert_eq!(data, decoded);
+    let compressed = pqp::format::compress(&data, &pqp::format::Algorithm::Zstd).unwrap();
+    assert!(
+        compressed.len() < data.len(),
+        "zstd should compress repetitive data"
+    );
+    let decompressed = pqp::format::decompress(&compressed, &pqp::format::Algorithm::Zstd).unwrap();
+    assert_eq!(data, decompressed);
 }
 
 #[test]
-fn test_format_deflate_roundtrip() {
-    let algorithms = pqp::format::AlgorithmList::new(vec![
-        pqp::format::Algorithm::Deflate,
-        pqp::format::Algorithm::Base64,
-    ]);
+fn test_compress_decompress_deflate() {
     let data = vec![42u8; 1024];
-    let encoded = pqp::format::encode_payload(&algorithms, &data).unwrap();
-    let decoded = pqp::format::decode_payload(&algorithms, &encoded).unwrap();
-    assert_eq!(data, decoded);
+    let compressed = pqp::format::compress(&data, &pqp::format::Algorithm::Deflate).unwrap();
+    assert!(
+        compressed.len() < data.len(),
+        "deflate should compress repetitive data"
+    );
+    let decompressed =
+        pqp::format::decompress(&compressed, &pqp::format::Algorithm::Deflate).unwrap();
+    assert_eq!(data, decompressed);
+}
+
+#[test]
+fn test_compress_decompress_gzip() {
+    let data = vec![42u8; 1024];
+    let compressed = pqp::format::compress(&data, &pqp::format::Algorithm::Gzip).unwrap();
+    assert!(
+        compressed.len() < data.len(),
+        "gzip should compress repetitive data"
+    );
+    let decompressed = pqp::format::decompress(&compressed, &pqp::format::Algorithm::Gzip).unwrap();
+    assert_eq!(data, decompressed);
+}
+
+#[test]
+fn test_compress_decompress_bzip2() {
+    let data = vec![42u8; 1024];
+    let compressed = pqp::format::compress(&data, &pqp::format::Algorithm::Bzip2).unwrap();
+    assert!(
+        compressed.len() < data.len(),
+        "bzip2 should compress repetitive data"
+    );
+    let decompressed =
+        pqp::format::decompress(&compressed, &pqp::format::Algorithm::Bzip2).unwrap();
+    assert_eq!(data, decompressed);
+}
+
+#[test]
+fn test_compress_decompress_lzma() {
+    let data = vec![42u8; 1024];
+    let compressed = pqp::format::compress(&data, &pqp::format::Algorithm::Lzma).unwrap();
+    assert!(
+        compressed.len() < data.len(),
+        "lzma should compress repetitive data"
+    );
+    let decompressed = pqp::format::decompress(&compressed, &pqp::format::Algorithm::Lzma).unwrap();
+    assert_eq!(data, decompressed);
 }
 
 #[test]
@@ -364,4 +402,110 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
     assert_eq!(decrypted, "data with no passphrase");
 
     let _ = std::fs::remove_dir_all(&outdir);
+}
+
+#[test]
+fn test_cli_encrypt_decrypt_with_compression() {
+    let outdir = std::env::temp_dir().join("pqp_compress");
+    let _ = std::fs::remove_dir_all(&outdir);
+    std::fs::create_dir_all(&outdir).unwrap();
+    let home = outdir.to_string_lossy().to_string();
+
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "compress@example.com", "--no-passphrase"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+
+    let output = Command::new(pqp_binary())
+        .args(["list-keys", "--format", "no-headers"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let key_id = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+
+    let data = b"AAAAAABBBBBBCCCCCCDDDDDDEEEEEEFFFFFGGGGGHHHHHIIIIIJJJJJKKKKKLLLLL"; // repetitive
+    let plain_path = outdir.join("data.txt");
+    std::fs::write(&plain_path, data).unwrap();
+
+    for algo in &["zstd", "gzip", "bzip2", "lzma"] {
+        let enc_path = outdir.join(format!("data.{}.pqp.enc", algo));
+        let output = Command::new(pqp_binary())
+            .args([
+                "encrypt",
+                "-r",
+                &key_id,
+                "--compress",
+                algo,
+                "-o",
+                &enc_path.to_string_lossy(),
+                &plain_path.to_string_lossy(),
+            ])
+            .env("HOME", &home)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "encrypt with --compress {} failed: {}",
+            algo,
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let dec_path = outdir.join(format!("data.{}.dec", algo));
+        let output = Command::new(pqp_binary())
+            .args([
+                "decrypt",
+                "--no-passphrase",
+                "-o",
+                &dec_path.to_string_lossy(),
+                &enc_path.to_string_lossy(),
+            ])
+            .env("HOME", &home)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "decrypt with compress {} failed: {}",
+            algo,
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let decrypted = std::fs::read_to_string(&dec_path).unwrap();
+        assert_eq!(
+            decrypted,
+            std::str::from_utf8(data).unwrap(),
+            "mismatch for compress {}",
+            algo
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&outdir);
+}
+
+#[test]
+fn test_format_algorithm_list_compression() {
+    let alg_str = "ML-KEM+XChaCha20-Poly1305+ZSTD+BASE64";
+    let list = pqp::format::AlgorithmList::parse(alg_str).unwrap();
+    assert_eq!(list.algorithms().len(), 4);
+    assert_eq!(list.compression(), Some(&pqp::format::Algorithm::Zstd));
+    assert_eq!(list.to_string(), alg_str);
+}
+
+#[test]
+fn test_encode_payload_ignores_compression() {
+    let algorithms = pqp::format::AlgorithmList::new(vec![
+        pqp::format::Algorithm::Zstd,
+        pqp::format::Algorithm::Base64,
+    ]);
+    let data = b"hello world";
+    let encoded = pqp::format::encode_payload(&algorithms, data).unwrap();
+    // encode_payload now only applies BASE64, so decoded should be the original
+    let decoded = pqp::format::decode_payload(&algorithms, &encoded).unwrap();
+    assert_eq!(data.to_vec(), decoded);
 }

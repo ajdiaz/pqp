@@ -13,6 +13,7 @@ use pqp::crypto::DsaVariant;
 use pqp::crypto::KemVariant;
 use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
+use std::str::FromStr;
 use zeroize::Zeroize;
 
 fn read_passphrase(prompt: &str) -> Result<String> {
@@ -206,6 +207,7 @@ fn main() -> Result<()> {
             input,
             sign,
             signer,
+            compress,
         } => {
             let recipient_id =
                 keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
@@ -228,6 +230,22 @@ fn main() -> Result<()> {
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
+            let compress_alg = if compress.eq_ignore_ascii_case("none") {
+                None
+            } else {
+                let alg_str = compress.to_uppercase();
+                Some(
+                    format::Algorithm::from_str(&alg_str)
+                        .context("unknown compression algorithm")?,
+                )
+            };
+
+            let plaintext = if let Some(ref alg) = compress_alg {
+                format::compress(&data, alg)?
+            } else {
+                data
+            };
+
             let (kem_pk, _, kem_alg, _) =
                 keyring::load_public_key(&recipient_id).context("loading recipient public key")?;
             let kem_variant = KemVariant::parse(&kem_alg)
@@ -237,17 +255,21 @@ fn main() -> Result<()> {
             let (ct, shared_secret) = crypto::kem::encapsulate(&kem_pk)?;
 
             let (nonce, ciphertext) =
-                sym::encrypt(&shared_secret, &data).context("symmetric encryption failed")?;
+                sym::encrypt(&shared_secret, &plaintext).context("symmetric encryption failed")?;
 
             let mut payload = ct.to_vec();
             payload.extend_from_slice(&nonce);
             payload.extend_from_slice(&ciphertext);
 
-            let algorithms = format::AlgorithmList::new(vec![
+            let mut alg_vec = vec![
                 format::Algorithm::MlKem,
                 format::Algorithm::XChaCha20Poly1305,
-                format::Algorithm::Base64,
-            ]);
+            ];
+            if let Some(ref alg) = compress_alg {
+                alg_vec.push(alg.clone());
+            }
+            alg_vec.push(format::Algorithm::Base64);
+            let algorithms = format::AlgorithmList::new(alg_vec);
 
             if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
@@ -289,8 +311,10 @@ fn main() -> Result<()> {
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
-            let (_algorithms, payload) =
+            let (algorithms, payload) =
                 format::deserialize(&data).context("parsing encrypted file")?;
+
+            let compress_alg = algorithms.compression();
 
             let nonce_len = 24;
 
@@ -331,9 +355,13 @@ fn main() -> Result<()> {
                 }
             }
 
-            let plaintext = decrypted.ok_or_else(|| {
+            let mut plaintext = decrypted.ok_or_else(|| {
                 anyhow::anyhow!("decryption failed: no matching key or wrong passphrase")
             })?;
+
+            if let Some(alg) = compress_alg {
+                plaintext = format::decompress(&plaintext, alg)?;
+            }
 
             let out_path = output.unwrap_or_else(|| {
                 let stripped = input_name.strip_suffix(".pqp.enc").unwrap_or(input_name);

@@ -2,8 +2,14 @@
 //!
 //! All serialized payloads use the format `AlgorithmList::EncodedPayload`.
 //! The [`AlgorithmList`] describes which algorithms were applied (KEM,
-//! symmetric cipher, compression, encoding). The payload is processed
-//! in reverse order during encoding and forward during decoding.
+//! symmetric cipher, compression, encoding).
+//!
+//! Compression is at the plaintext level (applied before encryption or
+//! after decryption) and is handled by the caller via [`compress`] and
+//! [`decompress`]. The [`encode_payload`]/[`decode_payload`] functions
+//! only handle encoding (BASE64, ASCII85). The compression algorithm
+//! name in the AlgorithmList serves as metadata so that decrypt can
+//! auto-detect which decompression to use.
 
 use anyhow::{Context, Result};
 use std::str::FromStr;
@@ -21,11 +27,26 @@ pub enum Algorithm {
     Argon2id,
     Zstd,
     Deflate,
+    Gzip,
+    Bzip2,
+    Lzma,
     Base64,
     Ascii85,
 }
 
 impl Algorithm {
+    /// Return `true` if this is a compression algorithm.
+    pub fn is_compression(&self) -> bool {
+        matches!(
+            self,
+            Algorithm::Zstd
+                | Algorithm::Deflate
+                | Algorithm::Gzip
+                | Algorithm::Bzip2
+                | Algorithm::Lzma
+        )
+    }
+
     /// Return the canonical string name for this algorithm.
     pub fn canonical_name(&self) -> &'static str {
         match self {
@@ -37,6 +58,9 @@ impl Algorithm {
             Algorithm::Argon2id => "Argon2id",
             Algorithm::Zstd => "ZSTD",
             Algorithm::Deflate => "DEFLATE",
+            Algorithm::Gzip => "GZIP",
+            Algorithm::Bzip2 => "BZIP2",
+            Algorithm::Lzma => "LZMA",
             Algorithm::Base64 => "BASE64",
             Algorithm::Ascii85 => "ASCII85",
         }
@@ -56,6 +80,9 @@ impl FromStr for Algorithm {
             "Argon2id" => Ok(Algorithm::Argon2id),
             "ZSTD" => Ok(Algorithm::Zstd),
             "DEFLATE" => Ok(Algorithm::Deflate),
+            "GZIP" => Ok(Algorithm::Gzip),
+            "BZIP2" => Ok(Algorithm::Bzip2),
+            "LZMA" => Ok(Algorithm::Lzma),
             "BASE64" => Ok(Algorithm::Base64),
             "ASCII85" => Ok(Algorithm::Ascii85),
             _ => Err(anyhow::anyhow!("unknown algorithm: {}", s)),
@@ -66,8 +93,9 @@ impl FromStr for Algorithm {
 /// Ordered list of algorithms applied to a payload.
 ///
 /// The encoding algorithm always appears last in the list.
-/// Compression and encoding steps are applied inside-out during
-/// encoding and outside-in during decoding.
+/// Compression algorithm names in the list serve as metadata for
+/// auto-detection during decrypt — the compression itself is handled
+/// by the caller via [`compress`]/[`decompress`].
 #[derive(Debug, Clone)]
 pub struct AlgorithmList {
     algorithms: Vec<Algorithm>,
@@ -87,6 +115,11 @@ impl AlgorithmList {
     /// Return the encoding algorithm (the last in the list), if any.
     pub fn encoding(&self) -> Option<&Algorithm> {
         self.algorithms.last()
+    }
+
+    /// Return the first compression algorithm found in the list, if any.
+    pub fn compression(&self) -> Option<&Algorithm> {
+        self.algorithms.iter().find(|alg| alg.is_compression())
     }
 
     /// Parse a `+`-separated algorithm string into an [`AlgorithmList`].
@@ -220,7 +253,11 @@ fn decode_raw(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     }
 }
 
-fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
+/// Compress `data` using the given compression algorithm.
+///
+/// Supported algorithms: [`Zstd`](Algorithm::Zstd), [`Deflate`](Algorithm::Deflate),
+/// [`Gzip`](Algorithm::Gzip), [`Bzip2`](Algorithm::Bzip2), [`Lzma`](Algorithm::Lzma).
+pub fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     match alg {
         Algorithm::Zstd => {
             let compressed = zstd::encode_all(std::io::Cursor::new(data), 3)
@@ -239,6 +276,32 @@ fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
                 .context("deflate compression finish failed")?;
             Ok(compressed)
         }
+        Algorithm::Gzip => {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            use std::io::Write;
+            encoder.write_all(data).context("gzip compression failed")?;
+            let compressed = encoder.finish().context("gzip compression finish failed")?;
+            Ok(compressed)
+        }
+        Algorithm::Bzip2 => {
+            let mut encoder =
+                bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::default());
+            use std::io::Write;
+            encoder
+                .write_all(data)
+                .context("bzip2 compression failed")?;
+            let compressed = encoder
+                .finish()
+                .context("bzip2 compression finish failed")?;
+            Ok(compressed)
+        }
+        Algorithm::Lzma => {
+            let mut compressed = Vec::new();
+            lzma_rs::lzma_compress(&mut std::io::Cursor::new(data), &mut compressed)
+                .context("lzma compression failed")?;
+            Ok(compressed)
+        }
         _ => Err(anyhow::anyhow!(
             "algorithm {} is not a compression algorithm",
             alg.canonical_name()
@@ -246,7 +309,11 @@ fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     }
 }
 
-fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
+/// Decompress `data` using the given compression algorithm.
+///
+/// Supported algorithms: [`Zstd`](Algorithm::Zstd), [`Deflate`](Algorithm::Deflate),
+/// [`Gzip`](Algorithm::Gzip), [`Bzip2`](Algorithm::Bzip2), [`Lzma`](Algorithm::Lzma).
+pub fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     match alg {
         Algorithm::Zstd => {
             let decompressed = zstd::decode_all(std::io::Cursor::new(data))
@@ -262,6 +329,30 @@ fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
                 .context("deflate decompression failed")?;
             Ok(decompressed)
         }
+        Algorithm::Gzip => {
+            let mut decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(data));
+            let mut decompressed = Vec::new();
+            use std::io::Read;
+            decoder
+                .read_to_end(&mut decompressed)
+                .context("gzip decompression failed")?;
+            Ok(decompressed)
+        }
+        Algorithm::Bzip2 => {
+            let mut decoder = bzip2::read::BzDecoder::new(std::io::Cursor::new(data));
+            let mut decompressed = Vec::new();
+            use std::io::Read;
+            decoder
+                .read_to_end(&mut decompressed)
+                .context("bzip2 decompression failed")?;
+            Ok(decompressed)
+        }
+        Algorithm::Lzma => {
+            let mut decompressed = Vec::new();
+            lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut decompressed)
+                .context("lzma decompression failed")?;
+            Ok(decompressed)
+        }
         _ => Err(anyhow::anyhow!(
             "algorithm {} is not a compression algorithm",
             alg.canonical_name()
@@ -269,19 +360,16 @@ fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     }
 }
 
-/// Compose a payload by applying all algorithms in the list.
+/// Compose a payload by applying all encoding algorithms in the list.
+///
+/// Only encoding algorithms (BASE64, ASCII85) are applied. Compression
+/// is handled separately by the caller via [`compress`]/[`decompress`].
 pub fn encode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let mut payload = data.to_vec();
 
     for alg in algorithms.algorithms().iter().rev().skip(1) {
-        match alg {
-            Algorithm::Zstd | Algorithm::Deflate => {
-                payload = compress(&payload, alg)?;
-            }
-            Algorithm::Base64 | Algorithm::Ascii85 => {
-                payload = encode_raw(&payload, alg)?;
-            }
-            _ => {}
+        if let Algorithm::Base64 | Algorithm::Ascii85 = alg {
+            payload = encode_raw(&payload, alg)?;
         }
     }
 
@@ -294,6 +382,9 @@ pub fn encode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>
 }
 
 /// Reverse the [`encode_payload`] transform to recover original data.
+///
+/// Only encoding algorithms are reversed. Compression is handled
+/// separately via [`compress`]/[`decompress`].
 pub fn decode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let encoding_alg = algorithms
         .encoding()
@@ -301,14 +392,8 @@ pub fn decode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>
     let mut payload = decode_raw(data, encoding_alg)?;
 
     for alg in algorithms.algorithms().iter().rev().skip(1) {
-        match alg {
-            Algorithm::Base64 | Algorithm::Ascii85 => {
-                payload = decode_raw(&payload, alg)?;
-            }
-            Algorithm::Zstd | Algorithm::Deflate => {
-                payload = decompress(&payload, alg)?;
-            }
-            _ => {}
+        if let Algorithm::Base64 | Algorithm::Ascii85 = alg {
+            payload = decode_raw(&payload, alg)?;
         }
     }
 

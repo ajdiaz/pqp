@@ -74,6 +74,12 @@ pub enum Commands {
             help = "Signer key ID or user ID (requires --sign)"
         )]
         signer: Option<String>,
+        #[arg(
+            long = "compress",
+            default_value = "zstd",
+            help = "Compression algorithm: none, zstd, gzip, bzip2, lzma"
+        )]
+        compress: String,
     },
     /// Decrypt a file.
     #[command(name = "decrypt")]
