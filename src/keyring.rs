@@ -125,6 +125,10 @@ pub fn read_metadata(key_id: &str) -> Result<KeyMetadata> {
     Ok(meta)
 }
 
+/// Resolve a key identifier (key ID or user ID) to a single key ID.
+///
+/// First checks if `identifier` is a key ID (directory name). If not,
+/// searches all keys for a matching `user_id` in `pqp.conf` metadata.
 pub fn resolve_key_id(identifier: &str) -> Result<String> {
     let dir = keys_dir()?;
     if !dir.exists() {
@@ -156,6 +160,10 @@ pub fn resolve_key_id(identifier: &str) -> Result<String> {
     ))
 }
 
+/// List all keys in the keyring, sorted by creation date.
+///
+/// Returns a [`KeyInfo`] for each key that has a `pqp.conf` file,
+/// including whether the public and/or secret key files exist.
 pub fn list_keys() -> Result<Vec<KeyInfo>> {
     let dir = keys_dir()?;
     if !dir.exists() {
