@@ -1,15 +1,54 @@
 //! ASCII-armor encoding for public key export/import.
 //!
-//! Wraps base64-encoded data in `-----BEGIN <marker>-----` and
+//! Wraps base64- or ascii85-encoded data in `-----BEGIN <marker>-----` and
 //! `-----END <marker>-----` delimiters, with 64-char line wrapping.
 
 use anyhow::{Context, Result};
 
 const LINE_WIDTH: usize = 64;
 
-/// Encode binary data as an ASCII-armored string with the given marker.
-pub fn armor(data: &[u8], marker: &str) -> Result<String> {
-    let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
+/// Encoding algorithm for the armored payload body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Encoding {
+    Base64,
+    Ascii85,
+}
+
+impl Encoding {
+    /// Returns the canonical name (e.g. "BASE64").
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Encoding::Base64 => "BASE64",
+            Encoding::Ascii85 => "ASCII85",
+        }
+    }
+
+    /// Parse a canonical name into an encoding variant.
+    pub fn parse(s: &str) -> Option<Self> {
+        use std::str::FromStr;
+        Self::from_str(s).ok()
+    }
+}
+
+impl std::str::FromStr for Encoding {
+    type Err = &'static str;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "BASE64" => Ok(Encoding::Base64),
+            "ASCII85" => Ok(Encoding::Ascii85),
+            _ => Err("unknown encoding"),
+        }
+    }
+}
+
+/// Encode binary data as an ASCII-armored string with the given marker and encoding.
+pub fn armor(data: &[u8], marker: &str, encoding: &Encoding) -> Result<String> {
+    let encoded = match encoding {
+        Encoding::Base64 => {
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data)
+        }
+        Encoding::Ascii85 => ascii85_encode(data),
+    };
 
     let mut result = String::new();
     result.push_str(&format!("-----BEGIN {}-----\n", marker));
@@ -24,6 +63,9 @@ pub fn armor(data: &[u8], marker: &str) -> Result<String> {
 }
 
 /// Decode an ASCII-armored string back into binary data, returning the marker and payload.
+///
+/// Tries base64 decoding first, then ascii85, and returns whichever
+/// succeeds. If both fail, returns the base64 error.
 pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>)> {
     let trimmed = armored.trim();
 
@@ -54,8 +96,61 @@ pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>)> {
         .filter(|c| !c.is_whitespace())
         .collect();
 
-    let decoded = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &clean)
-        .context("base64 decode failed in armor")?;
+    let decoded = base64_decode(&clean).or_else(|_| ascii85_decode(&clean))?;
 
     Ok((marker, decoded))
+}
+
+fn ascii85_encode(data: &[u8]) -> String {
+    let mut result = String::new();
+
+    let mut i = 0;
+    while i < data.len() {
+        let chunk_end = (i + 4).min(data.len());
+        let chunk = &data[i..chunk_end];
+        i = chunk_end;
+
+        if chunk.len() == 4 {
+            let val = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            if val == 0 {
+                result.push('z');
+            } else {
+                let c0 = ((val / 85u32.pow(4)) % 85) as u8 + 33;
+                let c1 = ((val / 85u32.pow(3)) % 85) as u8 + 33;
+                let c2 = ((val / 85u32.pow(2)) % 85) as u8 + 33;
+                let c3 = ((val / 85) % 85) as u8 + 33;
+                let c4 = (val % 85) as u8 + 33;
+                result.push(c0 as char);
+                result.push(c1 as char);
+                result.push(c2 as char);
+                result.push(c3 as char);
+                result.push(c4 as char);
+            }
+        } else {
+            let mut padded = [0u8; 4];
+            padded[..chunk.len()].copy_from_slice(chunk);
+            let mut val = u32::from_be_bytes(padded);
+            let count = chunk.len() + 1;
+            let mut tmp = [0u8; 5];
+            for j in (0..5).rev() {
+                tmp[j] = (val % 85) as u8 + 33;
+                val /= 85;
+            }
+            for &b in &tmp[..count] {
+                result.push(b as char);
+            }
+        }
+    }
+
+    result
+}
+
+fn base64_decode(data: &str) -> Result<Vec<u8>> {
+    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
+        .context("base64 decode failed")
+}
+
+fn ascii85_decode(data: &str) -> Result<Vec<u8>> {
+    let s = data.replace('z', "!!!!!");
+    ascii85::decode(&s).map_err(|e| anyhow::anyhow!("ascii85 decode failed: {}", e))
 }

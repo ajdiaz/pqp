@@ -5,9 +5,12 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use pqp::armor::Encoding;
 use pqp::cli::{Cli, Commands};
 use pqp::crypto::sign;
 use pqp::crypto::sym;
+use pqp::crypto::DsaVariant;
+use pqp::crypto::KemVariant;
 use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
 use zeroize::Zeroize;
@@ -94,7 +97,17 @@ fn main() -> Result<()> {
         Commands::GenKey {
             user,
             no_passphrase,
+            kem,
+            dsa,
+            encoding,
         } => {
+            let kem_variant =
+                KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
+            let dsa_variant =
+                DsaVariant::parse(&dsa).with_context(|| format!("unknown DSA variant: {}", dsa))?;
+            let encoding = Encoding::parse(&encoding)
+                .with_context(|| format!("unknown encoding: {}", encoding))?;
+
             let passphrase = if no_passphrase {
                 String::new()
             } else {
@@ -105,10 +118,14 @@ fn main() -> Result<()> {
                 }
                 passphrase
             };
-            let meta = keyring::generate_key(&user, &passphrase)?;
+            let meta =
+                keyring::generate_key(&user, &passphrase, kem_variant, dsa_variant, encoding)?;
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);
             println!("  created: {}", meta.created_at);
+            println!("  kem: {}", meta.kem_algorithm);
+            println!("  dsa: {}", meta.sign_algorithm);
+            println!("  encoding: {}", meta.encoding_algorithm);
         }
         Commands::ListKeys { format } => {
             let keys = keyring::list_keys()?;
@@ -211,9 +228,11 @@ fn main() -> Result<()> {
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
-            let (kem_pk, _) =
+            let (kem_pk, _, kem_alg, _) =
                 keyring::load_public_key(&recipient_id).context("loading recipient public key")?;
-            let kem_pk = crypto::kem::PublicKey::from_bytes(&kem_pk)?;
+            let kem_variant = KemVariant::parse(&kem_alg)
+                .context(format!("unknown KEM algorithm: {}", kem_alg))?;
+            let kem_pk = crypto::kem::PublicKey::from_bytes(&kem_pk, kem_variant)?;
 
             let (ct, shared_secret) = crypto::kem::encapsulate(&kem_pk)?;
 
@@ -233,12 +252,15 @@ fn main() -> Result<()> {
             if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
                 let mut passphrase = passphrase.unwrap();
-                let (_, sign_sk) = keyring::load_secret_key(sid, &passphrase)
-                    .context("loading signer secret key")?;
+                let (_, sign_sk, _sign_alg_kem, sign_alg) =
+                    keyring::load_secret_key(sid, &passphrase)
+                        .context("loading signer secret key")?;
                 passphrase.zeroize();
 
+                let dsa_variant = DsaVariant::parse(&sign_alg)
+                    .context(format!("unknown sign algorithm: {}", sign_alg))?;
                 let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk)?;
-                let signature = sign::sign(&sign_sk, &payload)?;
+                let signature = sign::sign(&sign_sk, &payload, dsa_variant)?;
                 payload.extend_from_slice(&signature);
             }
 
@@ -270,26 +292,40 @@ fn main() -> Result<()> {
             let (_algorithms, payload) =
                 format::deserialize(&data).context("parsing encrypted file")?;
 
-            let ct_len = 1088;
             let nonce_len = 24;
 
-            if payload.len() < ct_len + nonce_len {
+            if payload.len() < nonce_len {
                 return Err(anyhow::anyhow!("payload too short"));
             }
-
-            let ct = &payload[..ct_len];
-            let nonce_arr: [u8; 24] = payload[ct_len..ct_len + nonce_len].try_into().unwrap();
-            let sym_ciphertext = &payload[ct_len + nonce_len..];
 
             let keys = keyring::list_keys()?;
             let mut decrypted = None;
             for key in &keys {
-                if let Ok((kem_sk, _)) = keyring::load_secret_key(&key.key_id, &passphrase) {
-                    let kem_sk = crypto::kem::SecretKey::from_bytes(&kem_sk)?;
-                    if let Ok(shared) = crypto::kem::decapsulate(&kem_sk, ct) {
-                        if let Ok(plaintext) = sym::decrypt(&shared, &nonce_arr, sym_ciphertext) {
-                            decrypted = Some(plaintext);
-                            break;
+                if let Ok((kem_sk, _, kem_alg, _)) =
+                    keyring::load_secret_key(&key.key_id, &passphrase)
+                {
+                    if let Some(kem_variant) = KemVariant::parse(&kem_alg) {
+                        let ct_len = kem_variant.ciphertext_len();
+                        if payload.len() < ct_len + nonce_len {
+                            continue;
+                        }
+                        let ct = &payload[..ct_len];
+                        let nonce_arr: [u8; 24] =
+                            match payload[ct_len..ct_len + nonce_len].try_into() {
+                                Ok(n) => n,
+                                Err(_) => continue,
+                            };
+                        let sym_ciphertext = &payload[ct_len + nonce_len..];
+                        let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk) {
+                            Ok(sk) => sk,
+                            Err(_) => continue,
+                        };
+                        if let Ok(shared) = crypto::kem::decapsulate(&kem_sk, ct, kem_variant) {
+                            if let Ok(plaintext) = sym::decrypt(&shared, &nonce_arr, sym_ciphertext)
+                            {
+                                decrypted = Some(plaintext);
+                                break;
+                            }
                         }
                     }
                 }
@@ -321,8 +357,10 @@ fn main() -> Result<()> {
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
-            let (_, sign_sk) =
+            let (_, sign_sk, _, sign_alg) =
                 keyring::load_secret_key(&user_id, &passphrase).context("loading secret key")?;
+            let dsa_variant = DsaVariant::parse(&sign_alg)
+                .context(format!("unknown sign algorithm: {}", sign_alg))?;
 
             let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk)?;
 
@@ -331,7 +369,7 @@ fn main() -> Result<()> {
             hasher.update(&data);
             let hash = hasher.finalize();
 
-            let signature = sign::sign(&sign_sk, &hash)?;
+            let signature = sign::sign(&sign_sk, &hash, dsa_variant)?;
 
             let algorithms = format::AlgorithmList::new(vec![
                 format::Algorithm::MlDsa,
@@ -379,12 +417,16 @@ fn main() -> Result<()> {
             let keys = keyring::list_keys()?;
             let mut verified = false;
             for key in &keys {
-                let (_, sign_pk) = keyring::load_public_key(&key.key_id)?;
-                let sign_pk = crypto::sign::PublicKey::from_bytes(&sign_pk)?;
-                if let Ok(true) = sign::verify(&sign_pk, stored_hash, sig_bytes) {
-                    verified = true;
-                    println!("Verified: signed by key-id={}", key.key_id);
-                    break;
+                let (_, sign_pk, _, sign_alg) = keyring::load_public_key(&key.key_id)?;
+                if let Some(dsa_variant) = DsaVariant::parse(&sign_alg) {
+                    if let Ok(sign_pk) = crypto::sign::PublicKey::from_bytes(&sign_pk, dsa_variant)
+                    {
+                        if let Ok(true) = sign::verify(&sign_pk, stored_hash, sig_bytes) {
+                            verified = true;
+                            println!("Verified: signed by key-id={}", key.key_id);
+                            break;
+                        }
+                    }
                 }
             }
 

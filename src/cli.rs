@@ -24,6 +24,24 @@ pub enum Commands {
         user: String,
         #[arg(long = "no-passphrase", help = "Generate key without a passphrase")]
         no_passphrase: bool,
+        #[arg(
+            long = "kem",
+            default_value = "ML-KEM-768",
+            help = "KEM algorithm variant: ML-KEM-512, ML-KEM-768, ML-KEM-1024"
+        )]
+        kem: String,
+        #[arg(
+            long = "dsa",
+            default_value = "ML-DSA-65",
+            help = "Digital signature algorithm variant: ML-DSA-44, ML-DSA-65, ML-DSA-87"
+        )]
+        dsa: String,
+        #[arg(
+            long = "encoding",
+            default_value = "BASE64",
+            help = "Encoding for armored output: BASE64, ASCII85"
+        )]
+        encoding: String,
     },
     /// List keys in the keyring.
     #[command(name = "list-keys")]

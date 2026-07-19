@@ -1,33 +1,54 @@
 //! ML-DSA (CRYSTALS-Dilithium) FIPS 204 digital signatures.
 //!
-//! Uses ML-DSA-65 (security level 3). Public keys are 1952 bytes,
-//! secret keys (seeds) are 32 bytes, and signatures are 3290 bytes.
+//! Supports ML-DSA-44, ML-DSA-65, and ML-DSA-87 parameter sets.
+//! Public keys and signature sizes vary by variant; secret key
+//! seeds are always 32 bytes.
 
 use super::CryptoError;
+use super::DsaVariant;
 use ml_dsa::common::Key;
 use ml_dsa::*;
 use zeroize::Zeroize;
 
-pub struct PublicKey(Vec<u8>);
+/// An ML-DSA public key (verifying key).
+pub struct PublicKey {
+    bytes: Vec<u8>,
+    variant: DsaVariant,
+}
 
 #[allow(dead_code)]
 impl PublicKey {
-    /// Build a [`PublicKey`] from raw bytes, validating length.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
-        let vk_arr = <Key<VerifyingKey<MlDsa65>>>::try_from(bytes)
-            .map_err(|_| CryptoError::InvalidKey("invalid public key length".into()))?;
-        let _vk = VerifyingKey::<MlDsa65>::new(&vk_arr);
-        Ok(Self(bytes.to_vec()))
+    /// Build a [`PublicKey`] from raw bytes, validating the length
+    /// matches the expected size for the given variant.
+    pub fn from_bytes(bytes: &[u8], variant: DsaVariant) -> Result<Self, CryptoError> {
+        let expected = variant.public_key_len();
+        if bytes.len() != expected {
+            return Err(CryptoError::InvalidKey(format!(
+                "invalid {} public key length: got {}, expected {}",
+                variant.as_str(),
+                bytes.len(),
+                expected,
+            )));
+        }
+        Ok(Self {
+            bytes: bytes.to_vec(),
+            variant,
+        })
     }
 
     /// View the raw public key bytes.
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        &self.bytes
     }
 
     /// Clone the raw public key bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.clone()
+        self.bytes.clone()
+    }
+
+    /// The variant this key was created for.
+    pub fn variant(&self) -> DsaVariant {
+        self.variant
     }
 }
 
@@ -63,42 +84,119 @@ impl Drop for SecretKey {
     }
 }
 
-/// Generate a new ML-DSA-65 keypair.
-pub fn keypair() -> Result<(SecretKey, PublicKey), CryptoError> {
-    let signing_key = SigningKey::<MlDsa65>::generate();
-    let verifying_key = signing_key.verifying_key();
-
-    let seed: Seed = signing_key.to_bytes();
-    let vk_key: Key<VerifyingKey<MlDsa65>> = verifying_key.to_bytes();
-
-    Ok((SecretKey(seed.to_vec()), PublicKey(vk_key.to_vec())))
+/// Generate a new ML-DSA keypair for the given variant.
+pub fn keypair(variant: DsaVariant) -> Result<(SecretKey, PublicKey), CryptoError> {
+    match variant {
+        DsaVariant::MlDsa44 => {
+            let signing_key = SigningKey::<MlDsa44>::generate();
+            let verifying_key = signing_key.verifying_key();
+            let seed: Seed = signing_key.to_bytes();
+            let vk_key: Key<VerifyingKey<MlDsa44>> = verifying_key.to_bytes();
+            Ok((
+                SecretKey(seed.to_vec()),
+                PublicKey {
+                    bytes: vk_key.to_vec(),
+                    variant,
+                },
+            ))
+        }
+        DsaVariant::MlDsa65 => {
+            let signing_key = SigningKey::<MlDsa65>::generate();
+            let verifying_key = signing_key.verifying_key();
+            let seed: Seed = signing_key.to_bytes();
+            let vk_key: Key<VerifyingKey<MlDsa65>> = verifying_key.to_bytes();
+            Ok((
+                SecretKey(seed.to_vec()),
+                PublicKey {
+                    bytes: vk_key.to_vec(),
+                    variant,
+                },
+            ))
+        }
+        DsaVariant::MlDsa87 => {
+            let signing_key = SigningKey::<MlDsa87>::generate();
+            let verifying_key = signing_key.verifying_key();
+            let seed: Seed = signing_key.to_bytes();
+            let vk_key: Key<VerifyingKey<MlDsa87>> = verifying_key.to_bytes();
+            Ok((
+                SecretKey(seed.to_vec()),
+                PublicKey {
+                    bytes: vk_key.to_vec(),
+                    variant,
+                },
+            ))
+        }
+    }
 }
 
 /// Sign a message with an ML-DSA secret key.
-pub fn sign(sk: &SecretKey, message: &[u8]) -> Result<Vec<u8>, CryptoError> {
+pub fn sign(sk: &SecretKey, message: &[u8], variant: DsaVariant) -> Result<Vec<u8>, CryptoError> {
     let seed_arr = <Seed>::try_from(&sk.0[..32])
         .map_err(|_| CryptoError::Sign("invalid signing key seed".into()))?;
-    let signing_key = SigningKey::<MlDsa65>::new(&seed_arr);
 
-    let signature: Signature<MlDsa65> = signing_key.sign(message);
-    let sig_encoded: EncodedSignature<MlDsa65> = signature.encode();
-
-    Ok(sig_encoded.to_vec())
+    match variant {
+        DsaVariant::MlDsa44 => {
+            let signing_key = SigningKey::<MlDsa44>::new(&seed_arr);
+            let signature: Signature<MlDsa44> = signing_key.sign(message);
+            let sig_encoded: EncodedSignature<MlDsa44> = signature.encode();
+            Ok(sig_encoded.to_vec())
+        }
+        DsaVariant::MlDsa65 => {
+            let signing_key = SigningKey::<MlDsa65>::new(&seed_arr);
+            let signature: Signature<MlDsa65> = signing_key.sign(message);
+            let sig_encoded: EncodedSignature<MlDsa65> = signature.encode();
+            Ok(sig_encoded.to_vec())
+        }
+        DsaVariant::MlDsa87 => {
+            let signing_key = SigningKey::<MlDsa87>::new(&seed_arr);
+            let signature: Signature<MlDsa87> = signing_key.sign(message);
+            let sig_encoded: EncodedSignature<MlDsa87> = signature.encode();
+            Ok(sig_encoded.to_vec())
+        }
+    }
 }
 
 /// Verify a signature against a message using an ML-DSA public key.
 pub fn verify(pk: &PublicKey, message: &[u8], signature: &[u8]) -> Result<bool, CryptoError> {
-    let vk_arr = <Key<VerifyingKey<MlDsa65>>>::try_from(&pk.0[..])
-        .map_err(|_| CryptoError::Verify("invalid verifying key length".into()))?;
-    let verifying_key = VerifyingKey::<MlDsa65>::new(&vk_arr);
-
-    let sig_encoded = <EncodedSignature<MlDsa65>>::try_from(signature)
-        .map_err(|_| CryptoError::Verify("invalid signature length".into()))?;
-    let sig = Signature::<MlDsa65>::decode(&sig_encoded)
-        .ok_or_else(|| CryptoError::Verify("invalid signature encoding".into()))?;
-
-    match verifying_key.verify(message, &sig) {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
+    match pk.variant {
+        DsaVariant::MlDsa44 => {
+            let vk_arr = <Key<VerifyingKey<MlDsa44>>>::try_from(&pk.bytes[..])
+                .map_err(|_| CryptoError::Verify("invalid verifying key length".into()))?;
+            let verifying_key = VerifyingKey::<MlDsa44>::new(&vk_arr);
+            let sig_encoded = <EncodedSignature<MlDsa44>>::try_from(signature)
+                .map_err(|_| CryptoError::Verify("invalid signature length".into()))?;
+            let sig = Signature::<MlDsa44>::decode(&sig_encoded)
+                .ok_or_else(|| CryptoError::Verify("invalid signature encoding".into()))?;
+            match verifying_key.verify(message, &sig) {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            }
+        }
+        DsaVariant::MlDsa65 => {
+            let vk_arr = <Key<VerifyingKey<MlDsa65>>>::try_from(&pk.bytes[..])
+                .map_err(|_| CryptoError::Verify("invalid verifying key length".into()))?;
+            let verifying_key = VerifyingKey::<MlDsa65>::new(&vk_arr);
+            let sig_encoded = <EncodedSignature<MlDsa65>>::try_from(signature)
+                .map_err(|_| CryptoError::Verify("invalid signature length".into()))?;
+            let sig = Signature::<MlDsa65>::decode(&sig_encoded)
+                .ok_or_else(|| CryptoError::Verify("invalid signature encoding".into()))?;
+            match verifying_key.verify(message, &sig) {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            }
+        }
+        DsaVariant::MlDsa87 => {
+            let vk_arr = <Key<VerifyingKey<MlDsa87>>>::try_from(&pk.bytes[..])
+                .map_err(|_| CryptoError::Verify("invalid verifying key length".into()))?;
+            let verifying_key = VerifyingKey::<MlDsa87>::new(&vk_arr);
+            let sig_encoded = <EncodedSignature<MlDsa87>>::try_from(signature)
+                .map_err(|_| CryptoError::Verify("invalid signature length".into()))?;
+            let sig = Signature::<MlDsa87>::decode(&sig_encoded)
+                .ok_or_else(|| CryptoError::Verify("invalid signature encoding".into()))?;
+            match verifying_key.verify(message, &sig) {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            }
+        }
     }
 }

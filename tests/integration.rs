@@ -1,4 +1,8 @@
-use std::io::Write;
+use pqp::armor::Encoding;
+use pqp::crypto::kem;
+use pqp::crypto::keygen;
+use pqp::crypto::sign;
+use pqp::crypto::{DsaVariant, KemVariant};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -6,72 +10,38 @@ fn pqp_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pqp"))
 }
 
-fn run_pqp(args: &[&str], stdin: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new(pqp_binary());
-    cmd.args(args);
-    cmd.env_remove("HOME");
-
-    if let Some(input) = stdin {
-        let mut child = cmd
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("spawn failed: {}", e))?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(input.as_bytes())
-                .map_err(|e| format!("stdin write failed: {}", e))?;
-        }
-
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("wait failed: {}", e))?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            Err(format!(
-                "exit code: {}\nstdout: {}\nstderr: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ))
-        }
-    } else {
-        let output = cmd.output().map_err(|e| format!("output failed: {}", e))?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            Err(format!(
-                "exit code: {}\nstdout: {}\nstderr: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ))
-        }
-    }
-}
-
 #[test]
 fn test_gen_key_and_list_keys() {
-    let meta = pqp::keyring::generate_key("test@example.com", "testpass").unwrap();
+    let meta = pqp::keyring::generate_key(
+        "test@example.com",
+        "testpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
     assert!(!meta.key_id.is_empty());
 }
 
 #[test]
 fn test_cli_help() {
-    let output = run_pqp(&["--help"], None).unwrap();
-    assert!(output.contains("pqp"));
-    assert!(output.contains("gen-key"));
-    assert!(output.contains("encrypt"));
-    assert!(output.contains("decrypt"));
-    assert!(output.contains("sign"));
-    assert!(output.contains("verify"));
-    assert!(output.contains("export"));
-    assert!(output.contains("import"));
-    assert!(output.contains("list-keys"));
+    let output = Command::new(pqp_binary())
+        .args(["--help"])
+        .env_remove("HOME")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("pqp"));
+    assert!(stdout.contains("gen-key"));
+    assert!(stdout.contains("encrypt"));
+    assert!(stdout.contains("decrypt"));
+    assert!(stdout.contains("sign"));
+    assert!(stdout.contains("verify"));
+    assert!(stdout.contains("export"));
+    assert!(stdout.contains("import"));
+    assert!(stdout.contains("list-keys"));
 }
 
 #[test]
@@ -138,7 +108,7 @@ fn test_format_serialize_deserialize() {
 fn test_armor_roundtrip() {
     let data = b"armor test data";
     let marker = "TEST KEY";
-    let armored = pqp::armor::armor(data, marker).unwrap();
+    let armored = pqp::armor::armor(data, marker, &Encoding::Base64).unwrap();
     assert!(armored.contains(&format!("-----BEGIN {}-----", marker)));
     assert!(armored.contains(&format!("-----END {}-----", marker)));
 
@@ -149,28 +119,28 @@ fn test_armor_roundtrip() {
 
 #[test]
 fn test_kem_roundtrip() {
-    let (sk, pk) = pqp::crypto::kem::keypair().unwrap();
-    let (ct, shared1) = pqp::crypto::kem::encapsulate(&pk).unwrap();
-    let shared2 = pqp::crypto::kem::decapsulate(&sk, &ct).unwrap();
+    let (sk, pk) = kem::keypair(KemVariant::MlKem768).unwrap();
+    let (ct, shared1) = kem::encapsulate(&pk).unwrap();
+    let shared2 = kem::decapsulate(&sk, &ct, KemVariant::MlKem768).unwrap();
     assert_eq!(shared1, shared2);
 }
 
 #[test]
 fn test_sign_roundtrip() {
-    let (sk, pk) = pqp::crypto::sign::keypair().unwrap();
+    let (sk, pk) = sign::keypair(DsaVariant::MlDsa65).unwrap();
     let msg = b"test message for signing";
-    let sig = pqp::crypto::sign::sign(&sk, msg).unwrap();
-    let result = pqp::crypto::sign::verify(&pk, msg, &sig).unwrap();
+    let sig = sign::sign(&sk, msg, DsaVariant::MlDsa65).unwrap();
+    let result = sign::verify(&pk, msg, &sig).unwrap();
     assert!(result);
 }
 
 #[test]
 fn test_sign_rejects_tampered() {
-    let (sk, pk) = pqp::crypto::sign::keypair().unwrap();
+    let (sk, pk) = sign::keypair(DsaVariant::MlDsa65).unwrap();
     let msg = b"test message";
-    let sig = pqp::crypto::sign::sign(&sk, msg).unwrap();
+    let sig = sign::sign(&sk, msg, DsaVariant::MlDsa65).unwrap();
     let wrong_msg = b"wrong message";
-    let result = pqp::crypto::sign::verify(&pk, wrong_msg, &sig).unwrap();
+    let result = sign::verify(&pk, wrong_msg, &sig).unwrap();
     assert!(!result);
 }
 
@@ -212,21 +182,28 @@ fn test_key_derivation() {
 
 #[test]
 fn test_keygen_produces_valid_keys() {
-    let kp = pqp::crypto::keygen::generate().unwrap();
+    let kp = keygen::generate(KemVariant::MlKem768, DsaVariant::MlDsa65).unwrap();
 
-    let (ct, shared1) = pqp::crypto::kem::encapsulate(&kp.kem_public).unwrap();
-    let shared2 = pqp::crypto::kem::decapsulate(&kp.kem_secret, &ct).unwrap();
+    let (ct, shared1) = kem::encapsulate(&kp.kem_public).unwrap();
+    let shared2 = kem::decapsulate(&kp.kem_secret, &ct, KemVariant::MlKem768).unwrap();
     assert_eq!(shared1, shared2);
 
     let msg = b"keygen integration test";
-    let sig = pqp::crypto::sign::sign(&kp.sign_secret, msg).unwrap();
-    let valid = pqp::crypto::sign::verify(&kp.sign_public, msg, &sig).unwrap();
+    let sig = sign::sign(&kp.sign_secret, msg, DsaVariant::MlDsa65).unwrap();
+    let valid = sign::verify(&kp.sign_public, msg, &sig).unwrap();
     assert!(valid);
 }
 
 #[test]
 fn test_cli_sign_verify_stdin() {
-    let meta = pqp::keyring::generate_key("sign-stdin@example.com", "").unwrap();
+    let meta = pqp::keyring::generate_key(
+        "sign-stdin@example.com",
+        "",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
 
     let outdir = std::env::temp_dir().join(format!("pqp_sign_stdin_{}", meta.key_id));
     let _ = std::fs::remove_dir_all(&outdir);
@@ -235,7 +212,7 @@ fn test_cli_sign_verify_stdin() {
     let data_path = outdir.join("msg.txt");
     std::fs::write(&data_path, b"sign me via stdin").unwrap();
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args([
             "sign",
             "-u",
@@ -254,7 +231,7 @@ fn test_cli_sign_verify_stdin() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args([
             "verify",
             &sig_path.to_string_lossy(),
@@ -275,9 +252,16 @@ fn test_cli_sign_verify_stdin() {
 
 #[test]
 fn test_gen_key_no_passphrase() {
-    let meta = pqp::keyring::generate_key("nopass@example.com", "").unwrap();
+    let meta = pqp::keyring::generate_key(
+        "nopass@example.com",
+        "",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
     assert_eq!(meta.user_id, "nopass@example.com");
-    let (_kem_sk, _sign_sk) = pqp::keyring::load_secret_key(&meta.key_id, "").unwrap();
+    let (_kem_sk, _sign_sk, _, _) = pqp::keyring::load_secret_key(&meta.key_id, "").unwrap();
 }
 
 #[test]
@@ -287,7 +271,7 @@ fn test_cli_gen_key_no_passphrase() {
     std::fs::create_dir_all(&outdir).unwrap();
     let home = outdir.to_string_lossy().to_string();
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args(["gen-key", "-u", "cli-nopass@example.com", "--no-passphrase"])
         .env("HOME", &home)
         .output()
@@ -299,7 +283,7 @@ fn test_cli_gen_key_no_passphrase() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("cli-nopass@example.com"));
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args(["list-keys", "--format", "no-headers"])
         .env("HOME", &home)
         .output()
@@ -317,14 +301,14 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
     std::fs::create_dir_all(&outdir).unwrap();
     let home = outdir.to_string_lossy().to_string();
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args(["gen-key", "-u", "enc-nopass@example.com", "--no-passphrase"])
         .env("HOME", &home)
         .output()
         .unwrap();
     assert!(output.status.success(), "gen-key failed");
 
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args(["list-keys", "--format", "no-headers"])
         .env("HOME", &home)
         .output()
@@ -340,7 +324,7 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
     std::fs::write(&plain_path, b"data with no passphrase").unwrap();
 
     let enc_path = outdir.join("data.txt.pqp.enc");
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args([
             "encrypt",
             "-r",
@@ -359,7 +343,7 @@ fn test_cli_encrypt_decrypt_no_passphrase_key() {
     );
 
     let dec_path = outdir.join("data.dec");
-    let output = std::process::Command::new(pqp_binary())
+    let output = Command::new(pqp_binary())
         .args([
             "decrypt",
             "--no-passphrase",

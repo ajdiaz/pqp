@@ -5,14 +5,17 @@
 //! - `pqp-public.der` — plain public key bytes
 //! - `pqp-secret.der` — passphrase-encrypted secret key (Argon2id +
 //!   XChaCha20-Poly1305)
-//! - `pqp.conf` — JSON metadata (key ID, creation date, user ID)
+//! - `pqp.conf` — JSON metadata (key ID, creation date, user ID,
+//!   algorithm identifiers)
 //!
 //! Identifier resolution ([`resolve_key_id`]) accepts either a key ID
 //! (directory name) or a user ID (from `pqp.conf` metadata) for all
 //! commands that take a key reference.
 
 use crate::armor;
+use crate::armor::Encoding;
 use crate::crypto::{keygen, sym};
+use crate::crypto::{DsaVariant, KemVariant};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -26,6 +29,12 @@ pub struct KeyMetadata {
     pub user_id: String,
     pub kem_algorithm: String,
     pub sign_algorithm: String,
+    #[serde(default = "default_encoding")]
+    pub encoding_algorithm: String,
+}
+
+fn default_encoding() -> String {
+    "BASE64".into()
 }
 
 /// Enriched key information including key type and algorithm details.
@@ -38,6 +47,8 @@ pub struct KeyInfo {
     pub has_secret: bool,
     pub kem_algorithm: String,
     pub sign_algorithm: String,
+    #[serde(default = "default_encoding")]
+    pub encoding_algorithm: String,
 }
 
 fn pqp_dir() -> Result<PathBuf> {
@@ -86,6 +97,32 @@ fn days_to_date(days: u64) -> (u64, u64, u64) {
     };
 
     (y, m, d)
+}
+
+/// Parse a `KemVariant` from its canonical name string.
+pub fn parse_kem_variant(s: &str) -> Option<KemVariant> {
+    KemVariant::parse(s)
+}
+
+/// Parse a `DsaVariant` from its canonical name string.
+pub fn parse_dsa_variant(s: &str) -> Option<DsaVariant> {
+    DsaVariant::parse(s)
+}
+
+/// Parse an `Encoding` from its canonical name string.
+pub fn parse_encoding(s: &str) -> Option<Encoding> {
+    Encoding::parse(s)
+}
+
+/// Read metadata for a key.
+pub fn read_metadata(key_id: &str) -> Result<KeyMetadata> {
+    let dir = keys_dir()?.join(key_id);
+    let conf_path = dir.join("pqp.conf");
+    let content =
+        std::fs::read_to_string(&conf_path).context(format!("reading {}", conf_path.display()))?;
+    let meta: KeyMetadata =
+        serde_json::from_str(&content).context(format!("parsing {}", conf_path.display()))?;
+    Ok(meta)
 }
 
 pub fn resolve_key_id(identifier: &str) -> Result<String> {
@@ -144,6 +181,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 has_secret,
                 kem_algorithm: meta.kem_algorithm,
                 sign_algorithm: meta.sign_algorithm,
+                encoding_algorithm: meta.encoding_algorithm,
             });
         }
     }
@@ -151,8 +189,18 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
     Ok(keys)
 }
 
-pub fn generate_key(user_id: &str, passphrase: &str) -> Result<KeyMetadata> {
-    let keypair = keygen::generate()?;
+/// Generate a new key pair and store it in the keyring.
+///
+/// Accepts algorithm variants and an optional encoding. Defaults to
+/// ML-KEM-768, ML-DSA-65, and BASE64 if variants are not specified.
+pub fn generate_key(
+    user_id: &str,
+    passphrase: &str,
+    kem_variant: KemVariant,
+    dsa_variant: DsaVariant,
+    encoding: Encoding,
+) -> Result<KeyMetadata> {
+    let keypair = keygen::generate(kem_variant, dsa_variant)?;
 
     let key_id = generate_key_id()?;
     let now = timestamp_iso8601();
@@ -161,8 +209,9 @@ pub fn generate_key(user_id: &str, passphrase: &str) -> Result<KeyMetadata> {
         key_id: key_id.clone(),
         created_at: now,
         user_id: user_id.to_string(),
-        kem_algorithm: "ML-KEM-768".into(),
-        sign_algorithm: "ML-DSA-65".into(),
+        kem_algorithm: kem_variant.as_str().into(),
+        sign_algorithm: dsa_variant.as_str().into(),
+        encoding_algorithm: encoding.as_str().into(),
     };
 
     let dir = keys_dir()?.join(&key_id);
@@ -197,26 +246,43 @@ pub fn generate_key(user_id: &str, passphrase: &str) -> Result<KeyMetadata> {
     Ok(meta)
 }
 
-pub fn load_public_key(key_id: &str) -> Result<(Vec<u8>, Vec<u8>)> {
+/// Load a public key from the keyring, returning raw bytes and algorithm info.
+///
+/// Returns `(kem_pk_bytes, sign_pk_bytes, kem_algorithm, sign_algorithm)`.
+pub fn load_public_key(key_id: &str) -> Result<(Vec<u8>, Vec<u8>, String, String)> {
+    let meta = read_metadata(key_id)?;
+    let kem_variant = KemVariant::parse(&meta.kem_algorithm)
+        .context(format!("unknown KEM algorithm: {}", meta.kem_algorithm))?;
+    let dsa_variant = DsaVariant::parse(&meta.sign_algorithm)
+        .context(format!("unknown sign algorithm: {}", meta.sign_algorithm))?;
+
     let dir = keys_dir()?.join(key_id);
     let public_path = dir.join("pqp-public.der");
     let data = std::fs::read(&public_path).context(format!("reading {}", public_path.display()))?;
 
-    let kem_pk_len = 1184;
-    if data.len() < kem_pk_len {
+    let kem_pk_len = kem_variant.public_key_len();
+    let sign_pk_len = dsa_variant.public_key_len();
+    if data.len() < kem_pk_len + sign_pk_len {
         return Err(anyhow::anyhow!("public key data too short"));
     }
     let kem_pk = data[..kem_pk_len].to_vec();
-    let sign_pk = data[kem_pk_len..].to_vec();
+    let sign_pk = data[kem_pk_len..kem_pk_len + sign_pk_len].to_vec();
 
-    Ok((kem_pk, sign_pk))
+    Ok((kem_pk, sign_pk, meta.kem_algorithm, meta.sign_algorithm))
 }
 
 /// Load and decrypt a secret key from the keyring.
 ///
-/// Returns (kem_sk_bytes, sign_sk_bytes). The file format is:
-/// salt (16) || nonce (24) || XChaCha20-Poly1305 ciphertext.
-pub fn load_secret_key(key_id: &str, passphrase: &str) -> Result<(Vec<u8>, Vec<u8>)> {
+/// Returns `(kem_sk_bytes, sign_sk_bytes, kem_algorithm, sign_algorithm)`.
+/// The file format is: salt (16) || nonce (24) || XChaCha20-Poly1305 ciphertext.
+pub fn load_secret_key(
+    key_id: &str,
+    passphrase: &str,
+) -> Result<(Vec<u8>, Vec<u8>, String, String)> {
+    let meta = read_metadata(key_id)?;
+    let kem_variant = KemVariant::parse(&meta.kem_algorithm)
+        .context(format!("unknown KEM algorithm: {}", meta.kem_algorithm))?;
+
     let dir = keys_dir()?.join(key_id);
     let secret_path = dir.join("pqp-secret.der");
     let wrapped =
@@ -237,7 +303,7 @@ pub fn load_secret_key(key_id: &str, passphrase: &str) -> Result<(Vec<u8>, Vec<u
     let wrapping_key = sym::derive_key(passphrase, salt)?;
     let mut secret_bytes = sym::decrypt(&wrapping_key, &nonce_arr, encrypted)?;
 
-    let kem_sk_len = 64;
+    let kem_sk_len = kem_variant.secret_key_len();
     let sign_sk_len = 32;
     if secret_bytes.len() < kem_sk_len + sign_sk_len {
         return Err(anyhow::anyhow!("decrypted secret key data too short"));
@@ -247,17 +313,21 @@ pub fn load_secret_key(key_id: &str, passphrase: &str) -> Result<(Vec<u8>, Vec<u
 
     secret_bytes.zeroize();
 
-    Ok((kem_sk, sign_sk))
+    Ok((kem_sk, sign_sk, meta.kem_algorithm, meta.sign_algorithm))
 }
 
-/// Export a public key as an ASCII-armored string.
+/// Export a public key as an ASCII-armored string, using the key's preferred encoding.
 pub fn export_public_key(key_id: &str) -> Result<String> {
+    let meta = read_metadata(key_id)?;
+    let encoding = Encoding::parse(&meta.encoding_algorithm)
+        .context(format!("unknown encoding: {}", meta.encoding_algorithm))?;
+
     let dir = keys_dir()?.join(key_id);
     let public_bytes = std::fs::read(dir.join("pqp-public.der"))
         .context(format!("reading public key for {}", key_id))?;
 
     let marker = format!("PQP PUBLIC KEY {}", key_id);
-    armor::armor(&public_bytes, &marker)
+    armor::armor(&public_bytes, &marker, &encoding)
 }
 
 /// Import an ASCII-armored public key into the keyring.
@@ -283,6 +353,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             user_id: "imported".into(),
             kem_algorithm: "ML-KEM-768".into(),
             sign_algorithm: "ML-DSA-65".into(),
+            encoding_algorithm: "BASE64".into(),
         };
         let conf_json = serde_json::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_json)?;
