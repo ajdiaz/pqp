@@ -23,6 +23,9 @@
 //! with Argon2id + XChaCha20-Poly1305. All commands accept `-` or omit
 //! the input positional argument to read from stdin.
 //!
+//! All commands accept `--dry-run` / `-n` as a global flag to print a
+//! message to stderr and exit without performing any action.
+//!
 //! # Quick start
 //!
 //! ```bash

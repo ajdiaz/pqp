@@ -498,6 +498,117 @@ fn test_format_algorithm_list_compression() {
 }
 
 #[test]
+fn test_dry_run_gen_key() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "gen-key", "-u", "dry@example.com"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("dry-run"), "stderr: {stderr}");
+    assert!(stderr.contains("gen-key"), "stderr: {stderr}");
+}
+
+#[test]
+fn test_dry_run_list_keys() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "list-keys"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("list-keys"));
+}
+
+#[test]
+fn test_dry_run_encrypt() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "encrypt", "-r", "deadbeef", "-o", "/dev/null"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("encrypt"));
+}
+
+#[test]
+fn test_dry_run_decrypt() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "decrypt", "-o", "/dev/null"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("decrypt"));
+}
+
+#[test]
+fn test_dry_run_sign() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "sign", "-u", "deadbeef", "-o", "/dev/null"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("sign"));
+}
+
+#[test]
+fn test_dry_run_verify() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "verify", "/dev/null"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("verify"));
+}
+
+#[test]
+fn test_dry_run_remove_key() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "remove-key", "deadbeef"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("remove-key"));
+}
+
+#[test]
+fn test_dry_run_export() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "export", "deadbeef"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("export"));
+}
+
+#[test]
+fn test_dry_run_import() {
+    let output = Command::new(pqp_binary())
+        .args(["--dry-run", "import"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("import"));
+}
+
+#[test]
+fn test_dry_run_short_flag() {
+    let output = Command::new(pqp_binary())
+        .args(["-n", "list-keys"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("dry-run"));
+}
+
+#[test]
 fn test_encode_payload_ignores_compression() {
     let algorithms = pqp::format::AlgorithmList::new(vec![
         pqp::format::Algorithm::Zstd,

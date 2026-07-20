@@ -10,6 +10,15 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "pqp", about = "Quantum-Resistant GPG Emulation")]
 pub struct Cli {
+    /// Print a dry-run message and exit without doing anything.
+    #[arg(
+        short = 'n',
+        long = "dry-run",
+        global = true,
+        help = "Do nothing, print dry-run message"
+    )]
+    pub dry_run: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

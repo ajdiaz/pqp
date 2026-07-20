@@ -102,6 +102,10 @@ fn main() -> Result<()> {
             dsa,
             encoding,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would gen-key: no action taken");
+                return Ok(());
+            }
             let kem_variant =
                 KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
             let dsa_variant =
@@ -129,6 +133,10 @@ fn main() -> Result<()> {
             println!("  encoding: {}", meta.encoding_algorithm);
         }
         Commands::ListKeys { format } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would list-keys: no action taken");
+                return Ok(());
+            }
             let keys = keyring::list_keys()?;
             if keys.is_empty() {
                 println!("No keys in keyring.");
@@ -209,6 +217,10 @@ fn main() -> Result<()> {
             signer,
             compress,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would encrypt: no action taken");
+                return Ok(());
+            }
             let recipient_id =
                 keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
 
@@ -302,6 +314,10 @@ fn main() -> Result<()> {
             input,
             no_passphrase,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would decrypt: no action taken");
+                return Ok(());
+            }
             let passphrase = if no_passphrase {
                 String::new()
             } else {
@@ -376,6 +392,10 @@ fn main() -> Result<()> {
             input,
             no_passphrase,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would sign: no action taken");
+                return Ok(());
+            }
             let user_id = keyring::resolve_key_id(&user).context("resolving signing key")?;
             let passphrase = if no_passphrase {
                 String::new()
@@ -419,6 +439,10 @@ fn main() -> Result<()> {
             println!("Signed: {}", out_path);
         }
         Commands::Verify { signature, input } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would verify: no action taken");
+                return Ok(());
+            }
             let sig_data = read_file(&signature)?;
             let orig_data = read_input(&input)?;
 
@@ -469,6 +493,10 @@ fn main() -> Result<()> {
             dont_ask,
             remove_private_key,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would remove-key: no action taken");
+                return Ok(());
+            }
             let key_ids = keyring::resolve_key_ids(&key_id)?;
 
             for kid in &key_ids {
@@ -514,6 +542,10 @@ fn main() -> Result<()> {
             }
         }
         Commands::Export { key_id, output } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would export: no action taken");
+                return Ok(());
+            }
             let resolved_id = keyring::resolve_key_id(&key_id)?;
             let armored = keyring::export_public_key(&resolved_id)?;
             let out_path = output.unwrap_or_else(|| format!("{}.pqp.asc", key_id));
@@ -525,6 +557,10 @@ fn main() -> Result<()> {
             url,
             dont_ask_confirmation,
         } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would import: no action taken");
+                return Ok(());
+            }
             let armored = if let Some(url) = &url {
                 let response = ureq::get(url).call().context(format!("fetching {}", url))?;
                 response
