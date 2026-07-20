@@ -18,13 +18,105 @@
 //! | [`verify`](cli::Commands::Verify) | Verify a signature |
 //! | [`export`](cli::Commands::Export) | Export a public key (armored) |
 //! | [`import`](cli::Commands::Import) | Import a public key (armored) |
+//! | [`remove-key`](cli::Commands::RemoveKey) | Remove a public (and optionally private) key |
+//!
+//! # Global flags
+//!
+//! * `--dry-run` / `-n` — print a dry-run message to stderr and exit without action
+//!
+//! # Commands in detail
+//!
+//! ### `gen-key`
+//! `pqp gen-key -u <user> [--no-passphrase] [--kem <variant>] [--dsa <variant>] [--encoding <enc>]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `-u`, `--user` | User ID for the key |
+//! | `--no-passphrase` | Store the secret key without passphrase encryption |
+//! | `--kem` | KEM variant: `ML-KEM-512`, `ML-KEM-768` (default), `ML-KEM-1024` |
+//! | `--dsa` | DSA variant: `ML-DSA-44`, `ML-DSA-65` (default), `ML-DSA-87` |
+//! | `--encoding` | Armor encoding: `BASE64` (default), `ASCII85` |
+//!
+//! ### `list-keys`
+//! `pqp list-keys [--format <format>]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `--format` | Output format: `table` (default), `no-headers`, `json` |
+//!
+//! ### `encrypt`
+//! `pqp encrypt -r <recipient> -o <outfile> [--compress <algo>] [--sign] [--signer <user>] [infile]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `-r`, `--recipient` | Recipient key ID or user ID |
+//! | `-o`, `--output` | Output file path |
+//! | `--compress` | Compression: `none`, `zstd` (default), `gzip`, `bzip2`, `lzma` |
+//! | `-s`, `--sign` | Sign the ciphertext with sender key |
+//! | `-u`, `--signer` | Signer key ID or user ID (requires `--sign`) |
+//! | `infile` | Input file path (omit or `-` for stdin) |
+//!
+//! ### `decrypt`
+//! `pqp decrypt -o <outfile> [--no-passphrase] [infile]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `-o`, `--output` | Output file path |
+//! | `--no-passphrase` | Use empty passphrase (no prompt) |
+//! | `infile` | Input file path (omit or `-` for stdin) |
+//!
+//! ### `sign`
+//! `pqp sign -u <user> -o <outfile> [--no-passphrase] [infile]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `-u`, `--user` | Signing key ID or user ID |
+//! | `-o`, `--output` | Output signature file path |
+//! | `--no-passphrase` | Use empty passphrase (no prompt) |
+//! | `infile` | Input file path (omit or `-` for stdin) |
+//!
+//! ### `verify`
+//! `pqp verify <signature> [infile]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `signature` | Signature file path |
+//! | `infile` | Original file path (omit or `-` for stdin) |
+//!
+//! ### `export`
+//! `pqp export <key-id-or-user-id> [-o <outfile>]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `key_id` | Key ID or user ID to export |
+//! | `-o`, `--output` | Output file path |
+//!
+//! ### `import`
+//! `pqp import [--url <url>] [--dont-ask-confirmation] [infile]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `--url` | URL to fetch the armored key from |
+//! | `--dont-ask-confirmation` | Skip confirmation prompt before importing |
+//! | `infile` | Armored key file path (omit or `-` for stdin) |
+//!
+//! ### `remove-key`
+//! `pqp remove-key <key-id-or-user-id> [--dont-ask] [--remove-private-key]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `key_id` | Key ID or user ID to remove |
+//! | `--dont-ask` | Skip confirmation prompt before removing |
+//! | `--remove-private-key` | Also remove the private key if it exists |
+//!
+//! # Key storage
 //!
 //! Keys are stored in `~/.pqp/keys/<key-id>/`. Secret keys are encrypted
 //! with Argon2id + XChaCha20-Poly1305. All commands accept `-` or omit
 //! the input positional argument to read from stdin.
 //!
-//! All commands accept `--dry-run` / `-n` as a global flag to print a
-//! message to stderr and exit without performing any action.
+//! Identifiers (key ID or user ID) are resolved by checking directory names
+//! first, then matching `user_id` in `pqp.conf` metadata.
 //!
 //! # Quick start
 //!
