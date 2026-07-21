@@ -133,6 +133,12 @@ pub enum Commands {
             help = "Output format: armor (-----BEGIN/END-----) or pqp (AlgorithmList::Payload)"
         )]
         format_: String,
+        #[arg(
+            long = "compress",
+            default_value = "zstd",
+            help = "Compression for PQP format: none, zstd, gzip, bzip2, lzma (zstd default, ignored for armor)"
+        )]
+        compress: String,
     },
     /// Remove a public key (and optionally private key) from the keyring.
     #[command(name = "remove-key")]

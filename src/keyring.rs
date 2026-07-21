@@ -343,8 +343,12 @@ pub fn export_public_key(key_id: &str) -> Result<String> {
 ///
 /// The format embeds KEM and DSA variant names in the algorithm string,
 /// making it self-describing. Example:
-/// `ML-KEM-768+ML-DSA-65+BASE64::<base64 payload>`
-pub fn export_public_key_pqp(key_id: &str) -> Result<String> {
+/// `ML-KEM-768+ML-DSA-65+ZSTD+BASE64::<base64 payload>`
+///
+/// If `compress` is `Some(alg)`, the key bytes are compressed with the
+/// given algorithm before encoding. The compression algorithm name is
+/// included in the AlgorithmList so import can auto-detect it.
+pub fn export_public_key_pqp(key_id: &str, compress: Option<&format::Algorithm>) -> Result<String> {
     let meta = read_metadata(key_id)?;
     let kem_variant = KemVariant::parse(&meta.kem_algorithm)
         .context(format!("unknown KEM algorithm: {}", meta.kem_algorithm))?;
@@ -357,25 +361,36 @@ pub fn export_public_key_pqp(key_id: &str) -> Result<String> {
     let public_bytes = std::fs::read(dir.join("pqp-public.der"))
         .context(format!("reading public key for {}", key_id))?;
 
-    let algorithms = format::AlgorithmList::new(vec![
+    let data = if let Some(alg) = compress {
+        format::compress(&public_bytes, alg)?
+    } else {
+        public_bytes
+    };
+
+    let mut alg_vec = vec![
         format::Algorithm::from_kem_variant(kem_variant),
         format::Algorithm::from_dsa_variant(dsa_variant),
-        match encoding {
-            Encoding::Base64 => format::Algorithm::Base64,
-            Encoding::Ascii85 => format::Algorithm::Ascii85,
-        },
-    ]);
+    ];
+    if let Some(alg) = compress {
+        alg_vec.push(alg.clone());
+    }
+    alg_vec.push(match encoding {
+        Encoding::Base64 => format::Algorithm::Base64,
+        Encoding::Ascii85 => format::Algorithm::Ascii85,
+    });
 
-    let serialized = format::serialize(&algorithms, &public_bytes)?;
+    let algorithms = format::AlgorithmList::new(alg_vec);
+    let serialized = format::serialize(&algorithms, &data)?;
     Ok(String::from_utf8(serialized)?)
 }
 
 /// Import a public key from PQP format (`AlgorithmList::EncodedPayload`).
 ///
 /// Returns the imported key ID. The KEM and DSA variants are extracted
-/// from the algorithm string.
+/// from the algorithm string. If the payload was compressed, it is
+/// automatically decompressed using the algorithm stored in the list.
 pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
-    let (algorithms, payload) =
+    let (algorithms, mut payload) =
         format::deserialize(data.as_bytes()).context("parsing PQP key data")?;
 
     let kem_variant = algorithms
@@ -388,6 +403,10 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         .iter()
         .find_map(|a| a.to_dsa_variant())
         .context("no DSA variant found in PQP key data")?;
+
+    if let Some(alg) = algorithms.compression() {
+        payload = format::decompress(&payload, alg)?;
+    }
 
     let key_id = generate_key_id()?;
     let dir = keys_dir()?.join(&key_id);

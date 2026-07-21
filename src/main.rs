@@ -545,6 +545,7 @@ fn main() -> Result<()> {
             key_id,
             output,
             format_,
+            compress,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would export: no action taken");
@@ -553,7 +554,17 @@ fn main() -> Result<()> {
             let resolved_id = keyring::resolve_key_id(&key_id)?;
             match format_.as_str() {
                 "pqp" => {
-                    let pqp_data = keyring::export_public_key_pqp(&resolved_id)?;
+                    let compress_alg = if compress.eq_ignore_ascii_case("none") {
+                        None
+                    } else {
+                        let alg_str = compress.to_uppercase();
+                        Some(
+                            format::Algorithm::from_str(&alg_str)
+                                .context("unknown compression algorithm")?,
+                        )
+                    };
+                    let pqp_data =
+                        keyring::export_public_key_pqp(&resolved_id, compress_alg.as_ref())?;
                     let out_path = output.unwrap_or_else(|| format!("{}.pqp.pub", key_id));
                     write_file(&out_path, pqp_data.as_bytes())?;
                     println!("Exported (PQP format): {}", out_path);

@@ -91,10 +91,12 @@
 //! | `key_id` | Key ID or user ID to export |
 //! | `-o`, `--output` | Output file path |
 //! | `--format` | Output format: `armor` (default, PEM-style), `pqp` (`AlgorithmList::EncodedPayload`) |
+//! | `--compress` | Compression for PQP format: `none`, `zstd` (default), `gzip`, `bzip2`, `lzma` |
 //!
 //! The PQP format (`--format pqp`) encodes the key as
-//! `ML-KEM-768+ML-DSA-65+BASE64::<payload>`, embedding KEM and DSA variant
-//! names in the algorithm string for self-describing interchange.
+//! `ML-KEM-768+ML-DSA-65+[ZSTD]+BASE64::<payload>`, embedding KEM and DSA variant
+//! names in the algorithm string for self-describing interchange. Compression is
+//! applied before encoding and auto-detected on import.
 //!
 //! ### `import`
 //! `pqp import [--url <url>] [--dont-ask-confirmation] [infile]`

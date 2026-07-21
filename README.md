@@ -90,7 +90,8 @@ pqp verify contract.pdf.pqp.sig contract.pdf
 ```bash
 pqp list-keys --format json
 pqp export a1b2c3d4e5f6a7b8 -o alice.pqp.asc
-pqp export --format pqp a1b2c3d4e5f6a7b8           # Self-describing PQP format
+pqp export --format pqp a1b2c3d4e5f6a7b8           # Self-describing PQP format (ZSTD by default)
+pqp export --format pqp --compress none a1b2c3...   # PQP without compression
 pqp import alice.pqp.asc                             # Auto-detects format
 pqp import key.pqp.pub                               # PQP format auto-detected
 pqp import --url https://keys.example.com/bob.pqp.asc
@@ -133,7 +134,7 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 **verify:** `<signature>` · `[infile]`
 
-**export:** `<key-id>` · `-o <outfile>` · `--format <armor|pqp>`
+**export:** `<key-id>` · `-o <outfile>` · `--format <armor|pqp>` · `--compress <algo>`
 
 **import:** `[infile]` · `--url <url>` · `--dont-ask-confirmation`
 
@@ -156,7 +157,7 @@ AlgorithmList::EncodedPayload
 | Encrypted | `ML-KEM+XChaCha20-Poly1305+ZSTD+BASE64` | `.pqp.enc` |
 | Signature | `ML-DSA+SHA3-256+BASE64` | `.pqp.sig` |
 | Public Key (armor) | `-----BEGIN PQP PUBLIC KEY-----` | `.pqp.asc` |
-| Public Key (PQP) | `ML-KEM-768+ML-DSA-65+BASE64` | `.pqp.pub` |
+| Public Key (PQP) | `ML-KEM-768+ML-DSA-65+ZSTD+BASE64` | `.pqp.pub` |
 
 ### 🔐 Encrypted file layout
 

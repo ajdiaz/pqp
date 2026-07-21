@@ -522,7 +522,7 @@ fn test_export_public_key_pqp_format() {
     )
     .unwrap();
 
-    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
     assert!(pqp_data.contains("::"));
     assert!(pqp_data.contains("ML-KEM-768"));
     assert!(pqp_data.contains("ML-DSA-65"));
@@ -553,7 +553,7 @@ fn test_import_public_key_from_pqp() {
     )
     .unwrap();
 
-    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
     // Import into a different keyring
     let import_d = test_keyring_dir("import_pqp_dest");
@@ -626,7 +626,7 @@ fn test_cli_import_pqp_format() {
     )
     .unwrap();
 
-    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
     let key_file = d.join("key.pqp.pub");
     std::fs::write(&key_file, &pqp_data).unwrap();
 
@@ -659,7 +659,7 @@ fn test_pqp_format_roundtrip() {
     )
     .unwrap();
 
-    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
     let import_d = test_keyring_dir("pqp_roundtrip_dest");
     std::env::set_var("HOME", &import_d);
@@ -677,5 +677,100 @@ fn test_pqp_format_roundtrip() {
     assert_eq!(
         shared1, shared2,
         "export->import roundtrip should preserve key material"
+    );
+}
+
+#[test]
+fn test_pqp_format_compressed_roundtrip() {
+    for (suffix, name, alg) in &[
+        ("zstd", "ZSTD", pqp::format::Algorithm::Zstd),
+        ("gzip", "GZIP", pqp::format::Algorithm::Gzip),
+        ("deflate", "DEFLATE", pqp::format::Algorithm::Deflate),
+    ] {
+        let gen_dir = test_keyring_dir(&format!("pqp_compress_gen_{}", suffix));
+        let meta = pqp::keyring::generate_key(
+            &format!("compress-{}@example.com", suffix),
+            "pass",
+            KemVariant::MlKem768,
+            DsaVariant::MlDsa65,
+            Encoding::Base64,
+        )
+        .unwrap();
+
+        let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, Some(alg)).unwrap();
+        assert!(
+            pqp_data.contains(name),
+            "compressed PQP data should contain {}",
+            name
+        );
+
+        let import_dir = test_keyring_dir(&format!("pqp_compress_imp_{}", suffix));
+        std::env::set_var("HOME", &import_dir);
+        let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+
+        let (kem_pk, sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
+        let pk = pqp::crypto::kem::PublicKey::from_bytes(&kem_pk, KemVariant::MlKem768).unwrap();
+        let (ct, _) = pqp::crypto::kem::encapsulate(&pk).unwrap();
+        assert!(!ct.is_empty());
+
+        let _sign_pk =
+            pqp::crypto::sign::PublicKey::from_bytes(&sign_pk, DsaVariant::MlDsa65).unwrap();
+
+        std::fs::remove_dir_all(&gen_dir).ok();
+        std::fs::remove_dir_all(&import_dir).ok();
+    }
+}
+
+#[test]
+fn test_cli_export_pqp_with_compression() {
+    let d = test_keyring_dir("cli_pqp_compr");
+    let meta = pqp::keyring::generate_key(
+        "cli-pqp-compress@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let out_file = d.join("compressed.pqp.pub");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "export",
+            "--format",
+            "pqp",
+            "--compress",
+            "zstd",
+            "-o",
+            &out_file.to_string_lossy(),
+            &meta.key_id,
+        ])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "export --format pqp --compress zstd failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let file_content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(file_content.contains("ZSTD"));
+    assert!(file_content.contains("ML-KEM-768"));
+
+    // Re-import the compressed key to verify roundtrip
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "import",
+            "--dont-ask-confirmation",
+            &out_file.to_string_lossy(),
+        ])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "import compressed PQP failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
