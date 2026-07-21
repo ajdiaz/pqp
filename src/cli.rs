@@ -120,13 +120,19 @@ pub enum Commands {
         #[arg(help = "Original file path (omit or - for stdin)")]
         input: Option<String>,
     },
-    /// Export a public key (armored).
+    /// Export a public key (armored or PQP format).
     #[command(name = "export")]
     Export {
         #[arg(help = "Key ID or user ID to export")]
         key_id: String,
         #[arg(short = 'o', long = "output", help = "Output file path")]
         output: Option<String>,
+        #[arg(
+            long = "format",
+            default_value = "armor",
+            help = "Output format: armor (-----BEGIN/END-----) or pqp (AlgorithmList::Payload)"
+        )]
+        format_: String,
     },
     /// Remove a public key (and optionally private key) from the keyring.
     #[command(name = "remove-key")]

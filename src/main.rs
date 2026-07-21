@@ -541,16 +541,30 @@ fn main() -> Result<()> {
                 println!("Removed {} key {}/{}", removed, kid, meta.user_id);
             }
         }
-        Commands::Export { key_id, output } => {
+        Commands::Export {
+            key_id,
+            output,
+            format_,
+        } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would export: no action taken");
                 return Ok(());
             }
             let resolved_id = keyring::resolve_key_id(&key_id)?;
-            let armored = keyring::export_public_key(&resolved_id)?;
-            let out_path = output.unwrap_or_else(|| format!("{}.pqp.asc", key_id));
-            write_file(&out_path, armored.as_bytes())?;
-            println!("Exported: {}", out_path);
+            match format_.as_str() {
+                "pqp" => {
+                    let pqp_data = keyring::export_public_key_pqp(&resolved_id)?;
+                    let out_path = output.unwrap_or_else(|| format!("{}.pqp.pub", key_id));
+                    write_file(&out_path, pqp_data.as_bytes())?;
+                    println!("Exported (PQP format): {}", out_path);
+                }
+                _ => {
+                    let armored = keyring::export_public_key(&resolved_id)?;
+                    let out_path = output.unwrap_or_else(|| format!("{}.pqp.asc", key_id));
+                    write_file(&out_path, armored.as_bytes())?;
+                    println!("Exported: {}", out_path);
+                }
+            }
         }
         Commands::Import {
             input,
@@ -561,30 +575,37 @@ fn main() -> Result<()> {
                 eprintln!("[dry-run] would import: no action taken");
                 return Ok(());
             }
-            let armored = if let Some(url) = &url {
+            let data = if let Some(url) = &url {
                 let response = ureq::get(url).call().context(format!("fetching {}", url))?;
                 response
                     .into_body()
                     .read_to_string()
                     .context("reading response body")?
             } else {
-                let data = read_input(&input)?;
-                String::from_utf8(data).context("import data is not valid UTF-8")?
+                let bytes = read_input(&input)?;
+                String::from_utf8(bytes).context("import data is not valid UTF-8")?
             };
 
-            let (marker, _) = pqp::armor::unarmor(&armored).context("invalid armored key data")?;
-            let import_key_id = marker
-                .strip_prefix("PQP PUBLIC KEY ")
-                .unwrap_or(&marker)
-                .to_string();
-
-            if !dont_ask_confirmation && !confirm_import(&import_key_id)? {
-                println!("Import cancelled.");
-                return Ok(());
+            // Auto-detect format: try armor first, then PQP
+            if let Ok((marker, _)) = pqp::armor::unarmor(&data) {
+                let import_key_id = marker
+                    .strip_prefix("PQP PUBLIC KEY ")
+                    .unwrap_or(&marker)
+                    .to_string();
+                if !dont_ask_confirmation && !confirm_import(&import_key_id)? {
+                    println!("Import cancelled.");
+                    return Ok(());
+                }
+                let key_id = keyring::import_public_key(&data)?;
+                println!("Imported: key-id={}", key_id);
+            } else {
+                let key_id = keyring::import_public_key_from_pqp(&data)?;
+                if !dont_ask_confirmation && !confirm_import(&key_id)? {
+                    println!("Import cancelled.");
+                    return Ok(());
+                }
+                println!("Imported (PQP format): key-id={}", key_id);
             }
-
-            let key_id = keyring::import_public_key(&armored)?;
-            println!("Imported: key-id={}", key_id);
         }
     }
 

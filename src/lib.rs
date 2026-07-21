@@ -90,6 +90,11 @@
 //! |---|---|
 //! | `key_id` | Key ID or user ID to export |
 //! | `-o`, `--output` | Output file path |
+//! | `--format` | Output format: `armor` (default, PEM-style), `pqp` (`AlgorithmList::EncodedPayload`) |
+//!
+//! The PQP format (`--format pqp`) encodes the key as
+//! `ML-KEM-768+ML-DSA-65+BASE64::<payload>`, embedding KEM and DSA variant
+//! names in the algorithm string for self-describing interchange.
 //!
 //! ### `import`
 //! `pqp import [--url <url>] [--dont-ask-confirmation] [infile]`

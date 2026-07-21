@@ -509,3 +509,173 @@ fn test_import_from_stdin() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains(&meta.key_id));
 }
+
+#[test]
+fn test_export_public_key_pqp_format() {
+    let _d = test_keyring_dir("export_pqp");
+    let meta = pqp::keyring::generate_key(
+        "pqp-export@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    assert!(pqp_data.contains("::"));
+    assert!(pqp_data.contains("ML-KEM-768"));
+    assert!(pqp_data.contains("ML-DSA-65"));
+    assert!(pqp_data.contains("BASE64"));
+
+    // Verify it can be deserialized back
+    let (algorithms, payload) = pqp::format::deserialize(pqp_data.as_bytes()).unwrap();
+    assert!(algorithms
+        .algorithms()
+        .iter()
+        .any(|a| a.to_kem_variant() == Some(KemVariant::MlKem768)));
+    assert!(algorithms
+        .algorithms()
+        .iter()
+        .any(|a| a.to_dsa_variant() == Some(DsaVariant::MlDsa65)));
+    assert!(!payload.is_empty());
+}
+
+#[test]
+fn test_import_public_key_from_pqp() {
+    let _d = test_keyring_dir("import_pqp");
+    let meta = pqp::keyring::generate_key(
+        "pqp-import@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+
+    // Import into a different keyring
+    let import_d = test_keyring_dir("import_pqp_dest");
+    std::env::set_var("HOME", &import_d);
+
+    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+    assert!(!imported_id.is_empty());
+    assert_ne!(imported_id, meta.key_id, "imported key should get a new ID");
+
+    // Verify the imported key works
+    let (kem_pk, sign_pk, kem_alg, sign_alg) = pqp::keyring::load_public_key(&imported_id).unwrap();
+    assert!(!kem_pk.is_empty());
+    assert!(!sign_pk.is_empty());
+    assert_eq!(kem_alg, "ML-KEM-768");
+    assert_eq!(sign_alg, "ML-DSA-65");
+
+    let pk = pqp::crypto::kem::PublicKey::from_bytes(&kem_pk, KemVariant::MlKem768).unwrap();
+    let (ct, _shared1) = pqp::crypto::kem::encapsulate(&pk).unwrap();
+    assert!(!ct.is_empty());
+
+    let _sign_pk = pqp::crypto::sign::PublicKey::from_bytes(&sign_pk, DsaVariant::MlDsa65).unwrap();
+}
+
+#[test]
+fn test_cli_export_pqp_format() {
+    let d = test_keyring_dir("cli_export_pqp");
+    let meta = pqp::keyring::generate_key(
+        "cli-pqp-export@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let out_file = d.join("exported.pqp.pub");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "export",
+            "--format",
+            "pqp",
+            "-o",
+            &out_file.to_string_lossy(),
+            &meta.key_id,
+        ])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "export --format pqp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let file_content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(file_content.contains("ML-KEM-768"));
+    assert!(file_content.contains("ML-DSA-65"));
+    assert!(file_content.contains("::"));
+}
+
+#[test]
+fn test_cli_import_pqp_format() {
+    let d = test_keyring_dir("cli_import_pqp");
+    let meta = pqp::keyring::generate_key(
+        "cli-pqp-import@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+    let key_file = d.join("key.pqp.pub");
+    std::fs::write(&key_file, &pqp_data).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
+        .args([
+            "import",
+            "--dont-ask-confirmation",
+            &key_file.to_string_lossy(),
+        ])
+        .env("HOME", d.to_string_lossy().to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "import PQP format failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("PQP format"));
+}
+
+#[test]
+fn test_pqp_format_roundtrip() {
+    let d = test_keyring_dir("pqp_roundtrip");
+    let meta = pqp::keyring::generate_key(
+        "roundtrip@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id).unwrap();
+
+    let import_d = test_keyring_dir("pqp_roundtrip_dest");
+    std::env::set_var("HOME", &import_d);
+    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+
+    let (kem_pk, _sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
+    let pk = pqp::crypto::kem::PublicKey::from_bytes(&kem_pk, KemVariant::MlKem768).unwrap();
+    let (ct, shared1) = pqp::crypto::kem::encapsulate(&pk).unwrap();
+
+    // Load original's secret key to decapsulate and verify KEM roundtrip
+    std::env::set_var("HOME", &d);
+    let (kem_sk, _, _, _) = pqp::keyring::load_secret_key(&meta.key_id, "pass").unwrap();
+    let sk = pqp::crypto::kem::SecretKey::from_bytes(&kem_sk).unwrap();
+    let shared2 = pqp::crypto::kem::decapsulate(&sk, &ct, KemVariant::MlKem768).unwrap();
+    assert_eq!(
+        shared1, shared2,
+        "export->import roundtrip should preserve key material"
+    );
+}

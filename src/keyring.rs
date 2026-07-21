@@ -16,6 +16,7 @@ use crate::armor;
 use crate::armor::Encoding;
 use crate::crypto::{keygen, sym};
 use crate::crypto::{DsaVariant, KemVariant};
+use crate::format;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -336,6 +337,83 @@ pub fn export_public_key(key_id: &str) -> Result<String> {
 
     let marker = format!("PQP PUBLIC KEY {}", key_id);
     armor::armor(&public_bytes, &marker, &encoding)
+}
+
+/// Export a public key in PQP format (`AlgorithmList::EncodedPayload`).
+///
+/// The format embeds KEM and DSA variant names in the algorithm string,
+/// making it self-describing. Example:
+/// `ML-KEM-768+ML-DSA-65+BASE64::<base64 payload>`
+pub fn export_public_key_pqp(key_id: &str) -> Result<String> {
+    let meta = read_metadata(key_id)?;
+    let kem_variant = KemVariant::parse(&meta.kem_algorithm)
+        .context(format!("unknown KEM algorithm: {}", meta.kem_algorithm))?;
+    let dsa_variant = DsaVariant::parse(&meta.sign_algorithm)
+        .context(format!("unknown sign algorithm: {}", meta.sign_algorithm))?;
+    let encoding = Encoding::parse(&meta.encoding_algorithm)
+        .context(format!("unknown encoding: {}", meta.encoding_algorithm))?;
+
+    let dir = keys_dir()?.join(key_id);
+    let public_bytes = std::fs::read(dir.join("pqp-public.der"))
+        .context(format!("reading public key for {}", key_id))?;
+
+    let algorithms = format::AlgorithmList::new(vec![
+        format::Algorithm::from_kem_variant(kem_variant),
+        format::Algorithm::from_dsa_variant(dsa_variant),
+        match encoding {
+            Encoding::Base64 => format::Algorithm::Base64,
+            Encoding::Ascii85 => format::Algorithm::Ascii85,
+        },
+    ]);
+
+    let serialized = format::serialize(&algorithms, &public_bytes)?;
+    Ok(String::from_utf8(serialized)?)
+}
+
+/// Import a public key from PQP format (`AlgorithmList::EncodedPayload`).
+///
+/// Returns the imported key ID. The KEM and DSA variants are extracted
+/// from the algorithm string.
+pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
+    let (algorithms, payload) =
+        format::deserialize(data.as_bytes()).context("parsing PQP key data")?;
+
+    let kem_variant = algorithms
+        .algorithms()
+        .iter()
+        .find_map(|a| a.to_kem_variant())
+        .context("no KEM variant found in PQP key data")?;
+    let dsa_variant = algorithms
+        .algorithms()
+        .iter()
+        .find_map(|a| a.to_dsa_variant())
+        .context("no DSA variant found in PQP key data")?;
+
+    let key_id = generate_key_id()?;
+    let dir = keys_dir()?.join(&key_id);
+    std::fs::create_dir_all(&dir).context("creating key directory for import")?;
+
+    let kem_pk_len = kem_variant.public_key_len();
+    let dsa_pk_len = dsa_variant.public_key_len();
+    if payload.len() < kem_pk_len + dsa_pk_len {
+        return Err(anyhow::anyhow!("public key payload too short"));
+    }
+
+    std::fs::write(dir.join("pqp-public.der"), &payload)?;
+
+    let now = timestamp_iso8601();
+    let meta = KeyMetadata {
+        key_id: key_id.clone(),
+        created_at: now,
+        user_id: "imported".into(),
+        kem_algorithm: kem_variant.as_str().into(),
+        sign_algorithm: dsa_variant.as_str().into(),
+        encoding_algorithm: "BASE64".into(),
+    };
+    let conf_json = serde_json::to_string_pretty(&meta)?;
+    std::fs::write(dir.join("pqp.conf"), &conf_json)?;
+
+    Ok(key_id)
 }
 
 /// Import an ASCII-armored public key into the keyring.

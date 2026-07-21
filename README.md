@@ -90,7 +90,9 @@ pqp verify contract.pdf.pqp.sig contract.pdf
 ```bash
 pqp list-keys --format json
 pqp export a1b2c3d4e5f6a7b8 -o alice.pqp.asc
-pqp import alice.pqp.asc
+pqp export --format pqp a1b2c3d4e5f6a7b8           # Self-describing PQP format
+pqp import alice.pqp.asc                             # Auto-detects format
+pqp import key.pqp.pub                               # PQP format auto-detected
 pqp import --url https://keys.example.com/bob.pqp.asc
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 ```
@@ -131,7 +133,7 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 **verify:** `<signature>` · `[infile]`
 
-**export:** `<key-id>` · `-o <outfile>`
+**export:** `<key-id>` · `-o <outfile>` · `--format <armor|pqp>`
 
 **import:** `[infile]` · `--url <url>` · `--dont-ask-confirmation`
 
@@ -141,7 +143,7 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 ## 📁 File Format
 
-All encrypted and signed files use the format:
+All encrypted, signed, and key files use the format:
 
 ```
 AlgorithmList::EncodedPayload
@@ -153,7 +155,8 @@ AlgorithmList::EncodedPayload
 |---|---|---|
 | Encrypted | `ML-KEM+XChaCha20-Poly1305+ZSTD+BASE64` | `.pqp.enc` |
 | Signature | `ML-DSA+SHA3-256+BASE64` | `.pqp.sig` |
-| ASCII85 encoded | `ML-KEM+XChaCha20-Poly1305+ASCII85` | `.pqp.enc` |
+| Public Key (armor) | `-----BEGIN PQP PUBLIC KEY-----` | `.pqp.asc` |
+| Public Key (PQP) | `ML-KEM-768+ML-DSA-65+BASE64` | `.pqp.pub` |
 
 ### 🔐 Encrypted file layout
 

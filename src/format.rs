@@ -17,10 +17,20 @@ use std::str::FromStr;
 const SEPARATOR: &str = "::";
 
 /// Canonical algorithm identifiers used in [`AlgorithmList`].
+///
+/// Includes generic algorithm names (e.g. `ML-KEM`, `BASE64`) and
+/// variant-specific names (e.g. `ML-KEM-768`, `ML-DSA-65`) so that
+/// the format string can encode exact key algorithm variants.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Algorithm {
     MlKem,
+    MlKem512,
+    MlKem768,
+    MlKem1024,
     MlDsa,
+    MlDsa44,
+    MlDsa65,
+    MlDsa87,
     XChaCha20Poly1305,
     Aes256Gcm,
     Sha3256,
@@ -51,7 +61,13 @@ impl Algorithm {
     pub fn canonical_name(&self) -> &'static str {
         match self {
             Algorithm::MlKem => "ML-KEM",
+            Algorithm::MlKem512 => "ML-KEM-512",
+            Algorithm::MlKem768 => "ML-KEM-768",
+            Algorithm::MlKem1024 => "ML-KEM-1024",
             Algorithm::MlDsa => "ML-DSA",
+            Algorithm::MlDsa44 => "ML-DSA-44",
+            Algorithm::MlDsa65 => "ML-DSA-65",
+            Algorithm::MlDsa87 => "ML-DSA-87",
             Algorithm::XChaCha20Poly1305 => "XChaCha20-Poly1305",
             Algorithm::Aes256Gcm => "AES-256-GCM",
             Algorithm::Sha3256 => "SHA3-256",
@@ -73,7 +89,13 @@ impl FromStr for Algorithm {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "ML-KEM" => Ok(Algorithm::MlKem),
+            "ML-KEM-512" => Ok(Algorithm::MlKem512),
+            "ML-KEM-768" => Ok(Algorithm::MlKem768),
+            "ML-KEM-1024" => Ok(Algorithm::MlKem1024),
             "ML-DSA" => Ok(Algorithm::MlDsa),
+            "ML-DSA-44" => Ok(Algorithm::MlDsa44),
+            "ML-DSA-65" => Ok(Algorithm::MlDsa65),
+            "ML-DSA-87" => Ok(Algorithm::MlDsa87),
             "XChaCha20-Poly1305" => Ok(Algorithm::XChaCha20Poly1305),
             "AES-256-GCM" => Ok(Algorithm::Aes256Gcm),
             "SHA3-256" => Ok(Algorithm::Sha3256),
@@ -86,6 +108,46 @@ impl FromStr for Algorithm {
             "BASE64" => Ok(Algorithm::Base64),
             "ASCII85" => Ok(Algorithm::Ascii85),
             _ => Err(anyhow::anyhow!("unknown algorithm: {}", s)),
+        }
+    }
+}
+
+impl Algorithm {
+    /// If this is a KEM-variant algorithm, return the corresponding `KemVariant`.
+    pub fn to_kem_variant(&self) -> Option<crate::crypto::KemVariant> {
+        match self {
+            Algorithm::MlKem512 => Some(crate::crypto::KemVariant::MlKem512),
+            Algorithm::MlKem768 => Some(crate::crypto::KemVariant::MlKem768),
+            Algorithm::MlKem1024 => Some(crate::crypto::KemVariant::MlKem1024),
+            _ => None,
+        }
+    }
+
+    /// If this is a DSA-variant algorithm, return the corresponding `DsaVariant`.
+    pub fn to_dsa_variant(&self) -> Option<crate::crypto::DsaVariant> {
+        match self {
+            Algorithm::MlDsa44 => Some(crate::crypto::DsaVariant::MlDsa44),
+            Algorithm::MlDsa65 => Some(crate::crypto::DsaVariant::MlDsa65),
+            Algorithm::MlDsa87 => Some(crate::crypto::DsaVariant::MlDsa87),
+            _ => None,
+        }
+    }
+
+    /// Create a KEM-variant algorithm from a `KemVariant`.
+    pub fn from_kem_variant(v: crate::crypto::KemVariant) -> Self {
+        match v {
+            crate::crypto::KemVariant::MlKem512 => Algorithm::MlKem512,
+            crate::crypto::KemVariant::MlKem768 => Algorithm::MlKem768,
+            crate::crypto::KemVariant::MlKem1024 => Algorithm::MlKem1024,
+        }
+    }
+
+    /// Create a DSA-variant algorithm from a `DsaVariant`.
+    pub fn from_dsa_variant(v: crate::crypto::DsaVariant) -> Self {
+        match v {
+            crate::crypto::DsaVariant::MlDsa44 => Algorithm::MlDsa44,
+            crate::crypto::DsaVariant::MlDsa65 => Algorithm::MlDsa65,
+            crate::crypto::DsaVariant::MlDsa87 => Algorithm::MlDsa87,
         }
     }
 }
@@ -401,7 +463,6 @@ pub fn decode_payload(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>
 }
 
 /// Encode and format as `AlgorithmList::EncodedPayload`.
-#[allow(dead_code)]
 pub fn serialize(algorithms: &AlgorithmList, data: &[u8]) -> Result<Vec<u8>> {
     let encoded = encode_payload(algorithms, data)?;
     let header = algorithms.to_string();
