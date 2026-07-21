@@ -120,6 +120,21 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 |---|---|
 | `--dry-run`, `-n` | Print dry-run message and exit without action |
 
+### ⚙️ Global configuration file
+
+`pqp` reads `~/.pqp/pqp.json` if it exists. Set default options per command; CLI flags always win.
+
+```json
+{
+  "gen-key": { "kem": "ML-KEM-1024", "dsa": "ML-DSA-87" },
+  "list-keys": { "format": "json" },
+  "encrypt": { "compress": "gzip" },
+  "export": { "format": "pqp", "compress": "none" }
+}
+```
+
+A sample with all options is at `pqp.json.sample`.
+
 ### ⚙️ Per-command options
 
 **gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>`

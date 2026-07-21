@@ -20,6 +20,21 @@
 //! | [`import`](cli::Commands::Import) | Import a public key (armored) |
 //! | [`remove-key`](cli::Commands::RemoveKey) | Remove a public (and optionally private) key |
 //!
+//! # Global configuration file
+//!
+//! `pqp` reads `~/.pqp/pqp.json` if present. Each command section mirrors CLI
+//! options. Precedence (lowest to highest): code defaults < config file < CLI flags.
+//! See `pqp.json.sample` in the source tree for all available options.
+//!
+//! Example `~/.pqp/pqp.json`:
+//! ```json
+//! {
+//!   "gen-key": { "kem": "ML-KEM-1024", "dsa": "ML-DSA-87" },
+//!   "encrypt": { "compress": "gzip" },
+//!   "export": { "format": "pqp", "compress": "none" }
+//! }
+//! ```
+//!
 //! # Global flags
 //!
 //! * `--dry-run` / `-n` — print a dry-run message to stderr and exit without action
@@ -144,6 +159,7 @@
 
 pub mod armor;
 pub mod cli;
+pub mod config;
 pub mod crypto;
 pub mod format;
 pub mod keyring;

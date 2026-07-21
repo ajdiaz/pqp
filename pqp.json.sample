@@ -1,0 +1,17 @@
+{
+  "gen-key": {
+    "kem": "ML-KEM-768",
+    "dsa": "ML-DSA-65",
+    "encoding": "BASE64"
+  },
+  "list-keys": {
+    "format": "table"
+  },
+  "encrypt": {
+    "compress": "zstd"
+  },
+  "export": {
+    "format": "armor",
+    "compress": "zstd"
+  }
+}

@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use pqp::armor::Encoding;
 use pqp::cli::{Cli, Commands};
+use pqp::config;
 use pqp::crypto::sign;
 use pqp::crypto::sym;
 use pqp::crypto::DsaVariant;
@@ -94,18 +95,24 @@ fn write_file(path: &str, data: &[u8]) -> Result<()> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let cfg = config::load()?;
+
     match cli.command {
         Commands::GenKey {
             user,
             no_passphrase,
-            kem,
-            dsa,
-            encoding,
+            mut kem,
+            mut dsa,
+            mut encoding,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would gen-key: no action taken");
                 return Ok(());
             }
+            let cmd_cfg = config::section(&cfg, "gen-key");
+            kem = config::apply_str(&kem, cmd_cfg, "kem", "ML-KEM-768");
+            dsa = config::apply_str(&dsa, cmd_cfg, "dsa", "ML-DSA-65");
+            encoding = config::apply_str(&encoding, cmd_cfg, "encoding", "BASE64");
             let kem_variant =
                 KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
             let dsa_variant =
@@ -132,11 +139,13 @@ fn main() -> Result<()> {
             println!("  dsa: {}", meta.sign_algorithm);
             println!("  encoding: {}", meta.encoding_algorithm);
         }
-        Commands::ListKeys { format } => {
+        Commands::ListKeys { mut format } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would list-keys: no action taken");
                 return Ok(());
             }
+            let cmd_cfg = config::section(&cfg, "list-keys");
+            format = config::apply_str(&format, cmd_cfg, "format", "table");
             let keys = keyring::list_keys()?;
             if keys.is_empty() {
                 println!("No keys in keyring.");
@@ -215,12 +224,14 @@ fn main() -> Result<()> {
             input,
             sign,
             signer,
-            compress,
+            mut compress,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would encrypt: no action taken");
                 return Ok(());
             }
+            let cmd_cfg = config::section(&cfg, "encrypt");
+            compress = config::apply_str(&compress, cmd_cfg, "compress", "zstd");
             let recipient_id =
                 keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
 
@@ -544,13 +555,16 @@ fn main() -> Result<()> {
         Commands::Export {
             key_id,
             output,
-            format_,
-            compress,
+            mut format_,
+            mut compress,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would export: no action taken");
                 return Ok(());
             }
+            let cmd_cfg = config::section(&cfg, "export");
+            format_ = config::apply_str(&format_, cmd_cfg, "format", "armor");
+            compress = config::apply_str(&compress, cmd_cfg, "compress", "zstd");
             let resolved_id = keyring::resolve_key_id(&key_id)?;
             match format_.as_str() {
                 "pqp" => {
