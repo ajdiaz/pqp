@@ -22,17 +22,22 @@
 //!
 //! # Global configuration file
 //!
-//! `pqp` reads `~/.pqp/pqp.json` if present. Each command section mirrors CLI
+//! `pqp` reads `~/.pqp/pqp.toml` if present. Each command section mirrors CLI
 //! options. Precedence (lowest to highest): code defaults < config file < CLI flags.
-//! See `pqp.json.sample` in the source tree for all available options.
+//! See `pqp.toml.sample` in the source tree for all available options.
 //!
-//! Example `~/.pqp/pqp.json`:
-//! ```json
-//! {
-//!   "gen-key": { "kem": "ML-KEM-1024", "dsa": "ML-DSA-87" },
-//!   "encrypt": { "compress": "gzip" },
-//!   "export": { "format": "pqp", "compress": "none" }
-//! }
+//! Example `~/.pqp/pqp.toml`:
+//! ```toml
+//! [gen-key]
+//! kem = "ML-KEM-1024"
+//! dsa = "ML-DSA-87"
+//!
+//! [encrypt]
+//! compress = "gzip"
+//!
+//! [export]
+//! format = "pqp"
+//! compress = "none"
 //! ```
 //!
 //! # Global flags

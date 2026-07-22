@@ -1,0 +1,41 @@
+# pqp configuration file
+# Place at ~/.pqp/pqp.toml
+# Precedence: code defaults < this file < CLI flags
+
+# ── gen-key ────────────────────────────────────────────────────────────
+# Default algorithm variants and encoding for key generation.
+# CLI flags override these values.
+
+[gen-key]
+# KEM variant: "ML-KEM-512", "ML-KEM-768" (default), or "ML-KEM-1024"
+kem = "ML-KEM-768"
+
+# DSA variant: "ML-DSA-44", "ML-DSA-65" (default), or "ML-DSA-87"
+dsa = "ML-DSA-65"
+
+# Armor encoding: "BASE64" (default) or "ASCII85"
+encoding = "BASE64"
+
+# ── list-keys ──────────────────────────────────────────────────────────
+# Default output format for listing keys.
+
+[list-keys]
+# Output format: "table" (default, with column headers), "no-headers" (for scripting), or "json"
+format = "table"
+
+# ── encrypt ────────────────────────────────────────────────────────────
+# Default compression algorithm for encryption.
+
+[encrypt]
+# Compression: "none", "zstd" (default, fastest), "gzip", "bzip2", or "lzma"
+compress = "zstd"
+
+# ── export ─────────────────────────────────────────────────────────────
+# Default output format and compression for key export.
+
+[export]
+# Output format: "armor" (default, PEM-style) or "pqp" (self-describing)
+format = "armor"
+
+# Compression for PQP format: "none", "zstd" (default), "gzip", "bzip2", or "lzma"
+compress = "zstd"

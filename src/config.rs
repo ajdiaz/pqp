@@ -1,29 +1,37 @@
-//! Global configuration file `~/.pqp/pqp.json`.
+//! Global configuration file `~/.pqp/pqp.toml`.
 //!
 //! Provides defaults for CLI options. Precedence (lowest to highest):
 //! 1. Code-level hardcoded defaults
-//! 2. Config file values in `~/.pqp/pqp.json`
+//! 2. Config file values in `~/.pqp/pqp.toml`
 //! 3. CLI flags passed by the user
 //!
-//! The config file mirrors CLI command structure:
-//! ```json
-//! {
-//!   "gen-key": { "kem": "ML-KEM-1024", "dsa": "ML-DSA-87", "encoding": "ASCII85" },
-//!   "list-keys": { "format": "json" },
-//!   "encrypt": { "compress": "gzip" },
-//!   "export": { "format": "pqp", "compress": "none" }
-//! }
+//! The config file mirrors CLI command structure using TOML sections:
+//! ```toml
+//! [gen-key]
+//! kem = "ML-KEM-1024"
+//! dsa = "ML-DSA-87"
+//! encoding = "ASCII85"
+//!
+//! [list-keys]
+//! format = "json"
+//!
+//! [encrypt]
+//! compress = "gzip"
+//!
+//! [export]
+//! format = "pqp"
+//! compress = "none"
 //! ```
 
 use anyhow::{Context, Result};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use toml::Value;
 
 /// Path to the configuration file.
 fn config_path() -> Result<PathBuf> {
     let home = dirs::home_dir().context("cannot determine home directory")?;
-    Ok(home.join(".pqp").join("pqp.json"))
+    Ok(home.join(".pqp").join("pqp.toml"))
 }
 
 /// Load the config file, returning an empty map if it doesn't exist.
@@ -36,13 +44,12 @@ pub fn load() -> Result<HashMap<String, HashMap<String, Value>>> {
         return Ok(HashMap::new());
     }
     let content = std::fs::read_to_string(&path).context(format!("reading {}", path.display()))?;
-    let raw: Value =
-        serde_json::from_str(&content).context(format!("parsing {}", path.display()))?;
+    let raw: Value = toml::from_str(&content).context(format!("parsing {}", path.display()))?;
     let mut result: HashMap<String, HashMap<String, Value>> = HashMap::new();
-    if let Value::Object(map) = raw {
-        for (cmd, opts) in map {
-            if let Value::Object(opt_map) = opts {
-                let entries: HashMap<String, Value> = opt_map.into_iter().collect();
+    if let Value::Table(table) = raw {
+        for (cmd, opts) in table {
+            if let Value::Table(opt_table) = opts {
+                let entries: HashMap<String, Value> = opt_table.into_iter().collect();
                 result.insert(cmd, entries);
             }
         }
@@ -82,7 +89,7 @@ pub fn apply_bool(
         return cli;
     }
     if let Some(section) = config_section {
-        if let Some(Value::Bool(val)) = section.get(key) {
+        if let Some(Value::Boolean(val)) = section.get(key) {
             return *val;
         }
     }
@@ -113,7 +120,6 @@ mod tests {
 
     #[test]
     fn test_load_returns_empty_when_no_file() {
-        // Temporarily override home dir so config_path() resolves to a nonexistent file.
         let original = std::env::var_os("HOME");
         std::env::set_var("HOME", "/tmp/pqp-test-nonexistent-home-XXXX");
         let cfg = load().unwrap();
@@ -177,7 +183,7 @@ mod tests {
     #[test]
     fn test_apply_bool_uses_config_when_cli_is_default() {
         let mut opts = HashMap::new();
-        opts.insert("sign".to_string(), Value::Bool(true));
+        opts.insert("sign".to_string(), Value::Boolean(true));
         let mut map = HashMap::new();
         map.insert("test-cmd".to_string(), opts);
         let result = apply_bool(false, Some(&map["test-cmd"]), "sign", false);
@@ -206,19 +212,19 @@ mod tests {
     #[test]
     fn test_load_parses_valid_file() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("pqp.json");
+        let home = dir.path().join(".pqp");
+        std::fs::create_dir_all(&home).unwrap();
         std::fs::write(
-            &path,
-            r#"{"gen-key": {"kem": "ML-KEM-1024"}, "encrypt": {"compress": "gzip"}}"#,
+            home.join("pqp.toml"),
+            r#"[gen-key]
+kem = "ML-KEM-1024"
+
+[encrypt]
+compress = "gzip""#,
         )
         .unwrap();
-        // Temporarily set up config_path to point there — we override HOME
         let original = std::env::var_os("HOME");
-        std::env::set_var("HOME", dir.path().parent().unwrap());
-        // Actually we need a .pqp/ subdir in HOME
-        let home = dir.path().parent().unwrap().join(".pqp");
-        std::fs::create_dir_all(&home).ok();
-        std::fs::copy(&path, home.join("pqp.json")).ok();
+        std::env::set_var("HOME", dir.path());
         let cfg = load().unwrap();
         assert!(!cfg.is_empty());
         assert_eq!(

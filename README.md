@@ -122,18 +122,22 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 ### ⚙️ Global configuration file
 
-`pqp` reads `~/.pqp/pqp.json` if it exists. Set default options per command; CLI flags always win.
+`pqp` reads `~/.pqp/pqp.toml` if it exists. Set default options per command with TOML sections; CLI flags always win.
 
-```json
-{
-  "gen-key": { "kem": "ML-KEM-1024", "dsa": "ML-DSA-87" },
-  "list-keys": { "format": "json" },
-  "encrypt": { "compress": "gzip" },
-  "export": { "format": "pqp", "compress": "none" }
-}
+```toml
+[gen-key]
+kem = "ML-KEM-1024"
+dsa = "ML-DSA-87"
+
+[encrypt]
+compress = "gzip"
+
+[export]
+format = "pqp"
+compress = "none"
 ```
 
-A sample with all options is at `pqp.json.sample`.
+A sample with all options and comments is at `pqp.toml.sample`.
 
 ### ⚙️ Per-command options
 
