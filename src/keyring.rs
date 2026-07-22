@@ -5,7 +5,7 @@
 //! - `pqp-public.der` — plain public key bytes
 //! - `pqp-secret.der` — passphrase-encrypted secret key (Argon2id +
 //!   XChaCha20-Poly1305)
-//! - `pqp.conf` — JSON metadata (key ID, creation date, user ID,
+//! - `pqp.conf` — TOML metadata (key ID, creation date, user ID,
 //!   algorithm identifiers)
 //!
 //! Identifier resolution ([`resolve_key_id`]) accepts either a key ID
@@ -115,15 +115,65 @@ pub fn parse_encoding(s: &str) -> Option<Encoding> {
     Encoding::parse(s)
 }
 
+/// Parse a `pqp.conf` file, supporting both TOML (new) and legacy JSON (old).
+fn parse_conf(content: &str) -> Result<KeyMetadata> {
+    // Detect format by first non-whitespace character.
+    let trimmed = content.trim_start();
+    if trimmed.starts_with('{') {
+        return parse_legacy_json_conf(trimmed);
+    }
+    toml::from_str(content).context("failed to parse pqp.conf as TOML")
+}
+
+/// Minimal legacy JSON parser for `pqp.conf` files written by older versions.
+fn parse_legacy_json_conf(content: &str) -> Result<KeyMetadata> {
+    fn extract_field<'a>(content: &'a str, key: &str) -> Result<&'a str> {
+        let pattern = format!(r#""{}""#, key);
+        let Some(start) = content.find(&pattern) else {
+            return Err(anyhow::anyhow!("missing field: {}", key));
+        };
+        let after_key = &content[start + pattern.len()..];
+        let Some(colon) = after_key.find(':') else {
+            return Err(anyhow::anyhow!(
+                "malformed JSON: expected ':' after key '{}'",
+                key
+            ));
+        };
+        let after_colon = &after_key[colon + 1..];
+        let Some(value_start) = after_colon.find('"') else {
+            return Err(anyhow::anyhow!(
+                "malformed JSON: expected string value for '{}'",
+                key
+            ));
+        };
+        let after_open = &after_colon[value_start + 1..];
+        // Simple pqp.conf values never contain escaped quotes, just find closing `"`.
+        let end = after_open
+            .find('"')
+            .ok_or_else(|| anyhow::anyhow!("malformed JSON: unclosed string for '{}'", key))?;
+        Ok(&after_open[..end])
+    }
+
+    Ok(KeyMetadata {
+        key_id: extract_field(content, "key_id")?.to_string(),
+        created_at: extract_field(content, "created_at")?.to_string(),
+        user_id: extract_field(content, "user_id")?.to_string(),
+        kem_algorithm: extract_field(content, "kem_algorithm")?.to_string(),
+        sign_algorithm: extract_field(content, "sign_algorithm")?.to_string(),
+        encoding_algorithm: extract_field(content, "encoding_algorithm")
+            .map(|s| if s.is_empty() { "BASE64" } else { s })
+            .unwrap_or("BASE64")
+            .to_string(),
+    })
+}
+
 /// Read metadata for a key.
 pub fn read_metadata(key_id: &str) -> Result<KeyMetadata> {
     let dir = keys_dir()?.join(key_id);
     let conf_path = dir.join("pqp.conf");
     let content =
         std::fs::read_to_string(&conf_path).context(format!("reading {}", conf_path.display()))?;
-    let meta: KeyMetadata =
-        serde_json::from_str(&content).context(format!("parsing {}", conf_path.display()))?;
-    Ok(meta)
+    parse_conf(&content).context(format!("parsing {}", conf_path.display()))
 }
 
 /// Resolve a key identifier (key ID or user ID) to a single key ID.
@@ -147,8 +197,7 @@ pub fn resolve_key_id(identifier: &str) -> Result<String> {
         if conf_path.exists() {
             let content = std::fs::read_to_string(&conf_path)
                 .context(format!("reading {}", conf_path.display()))?;
-            let meta: KeyMetadata = serde_json::from_str(&content)
-                .context(format!("parsing {}", conf_path.display()))?;
+            let meta = parse_conf(&content).context(format!("parsing {}", conf_path.display()))?;
             if meta.user_id == identifier {
                 return Ok(meta.key_id);
             }
@@ -178,8 +227,8 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
         if conf_path.exists() {
             let content = std::fs::read_to_string(&conf_path)
                 .context(format!("reading {}", conf_path.display()))?;
-            let meta: KeyMetadata = serde_json::from_str(&content)
-                .context(format!("parsing {}", conf_path.display()))?;
+            let meta: KeyMetadata =
+                parse_conf(&content).context(format!("parsing {}", conf_path.display()))?;
             let has_public = entry.path().join("pqp-public.der").exists();
             let has_secret = entry.path().join("pqp-secret.der").exists();
             keys.push(KeyInfo {
@@ -249,7 +298,7 @@ pub fn generate_key(
 
     std::fs::write(dir.join("pqp-secret.der"), &wrapped).context("writing secret key")?;
 
-    let conf_json = serde_json::to_string_pretty(&meta).context("serializing key metadata")?;
+    let conf_json = toml::to_string_pretty(&meta).context("serializing key metadata")?;
     std::fs::write(dir.join("pqp.conf"), &conf_json).context("writing key config")?;
 
     Ok(meta)
@@ -429,7 +478,7 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: "BASE64".into(),
     };
-    let conf_json = serde_json::to_string_pretty(&meta)?;
+    let conf_json = toml::to_string_pretty(&meta)?;
     std::fs::write(dir.join("pqp.conf"), &conf_json)?;
 
     Ok(key_id)
@@ -460,7 +509,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             sign_algorithm: "ML-DSA-65".into(),
             encoding_algorithm: "BASE64".into(),
         };
-        let conf_json = serde_json::to_string_pretty(&meta)?;
+        let conf_json = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_json)?;
     }
 
@@ -491,8 +540,8 @@ pub fn resolve_key_ids(identifier: &str) -> Result<Vec<String>> {
         if conf_path.exists() {
             let content = std::fs::read_to_string(&conf_path)
                 .context(format!("reading {}", conf_path.display()))?;
-            let meta: KeyMetadata = serde_json::from_str(&content)
-                .context(format!("parsing {}", conf_path.display()))?;
+            let meta: KeyMetadata =
+                parse_conf(&content).context(format!("parsing {}", conf_path.display()))?;
             if meta.user_id == identifier {
                 matches.push(meta.key_id);
             }

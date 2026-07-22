@@ -152,8 +152,37 @@ fn main() -> Result<()> {
             } else {
                 match format.as_str() {
                     "json" => {
-                        let json = serde_json::to_string_pretty(&keys)?;
-                        println!("{json}");
+                        let mut items = Vec::new();
+                        for key in &keys {
+                            let kt = if key.has_secret && key.has_public {
+                                "pub+sec"
+                            } else if key.has_secret {
+                                "sec"
+                            } else {
+                                "pub"
+                            };
+                            items.push(format!(
+                                r#"  {{
+    "key_id": "{}",
+    "user_id": "{}",
+    "created_at": "{}",
+    "has_public": {},
+    "has_secret": {},
+    "type": "{}",
+    "kem_algorithm": "{}",
+    "sign_algorithm": "{}"
+  }}"#,
+                                key.key_id,
+                                key.user_id,
+                                key.created_at,
+                                key.has_public,
+                                key.has_secret,
+                                kt,
+                                key.kem_algorithm,
+                                key.sign_algorithm,
+                            ));
+                        }
+                        println!("[\n{}\n]", items.join(",\n"));
                     }
                     "no-headers" | "noheader" | "no-head" => {
                         for key in &keys {
