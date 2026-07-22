@@ -115,56 +115,9 @@ pub fn parse_encoding(s: &str) -> Option<Encoding> {
     Encoding::parse(s)
 }
 
-/// Parse a `pqp.conf` file, supporting both TOML (new) and legacy JSON (old).
+/// Parse a `pqp.conf` file as TOML.
 fn parse_conf(content: &str) -> Result<KeyMetadata> {
-    // Detect format by first non-whitespace character.
-    let trimmed = content.trim_start();
-    if trimmed.starts_with('{') {
-        return parse_legacy_json_conf(trimmed);
-    }
     toml::from_str(content).context("failed to parse pqp.conf as TOML")
-}
-
-/// Minimal legacy JSON parser for `pqp.conf` files written by older versions.
-fn parse_legacy_json_conf(content: &str) -> Result<KeyMetadata> {
-    fn extract_field<'a>(content: &'a str, key: &str) -> Result<&'a str> {
-        let pattern = format!(r#""{}""#, key);
-        let Some(start) = content.find(&pattern) else {
-            return Err(anyhow::anyhow!("missing field: {}", key));
-        };
-        let after_key = &content[start + pattern.len()..];
-        let Some(colon) = after_key.find(':') else {
-            return Err(anyhow::anyhow!(
-                "malformed JSON: expected ':' after key '{}'",
-                key
-            ));
-        };
-        let after_colon = &after_key[colon + 1..];
-        let Some(value_start) = after_colon.find('"') else {
-            return Err(anyhow::anyhow!(
-                "malformed JSON: expected string value for '{}'",
-                key
-            ));
-        };
-        let after_open = &after_colon[value_start + 1..];
-        // Simple pqp.conf values never contain escaped quotes, just find closing `"`.
-        let end = after_open
-            .find('"')
-            .ok_or_else(|| anyhow::anyhow!("malformed JSON: unclosed string for '{}'", key))?;
-        Ok(&after_open[..end])
-    }
-
-    Ok(KeyMetadata {
-        key_id: extract_field(content, "key_id")?.to_string(),
-        created_at: extract_field(content, "created_at")?.to_string(),
-        user_id: extract_field(content, "user_id")?.to_string(),
-        kem_algorithm: extract_field(content, "kem_algorithm")?.to_string(),
-        sign_algorithm: extract_field(content, "sign_algorithm")?.to_string(),
-        encoding_algorithm: extract_field(content, "encoding_algorithm")
-            .map(|s| if s.is_empty() { "BASE64" } else { s })
-            .unwrap_or("BASE64")
-            .to_string(),
-    })
 }
 
 /// Read metadata for a key.
@@ -298,8 +251,8 @@ pub fn generate_key(
 
     std::fs::write(dir.join("pqp-secret.der"), &wrapped).context("writing secret key")?;
 
-    let conf_json = toml::to_string_pretty(&meta).context("serializing key metadata")?;
-    std::fs::write(dir.join("pqp.conf"), &conf_json).context("writing key config")?;
+    let conf_toml = toml::to_string_pretty(&meta).context("serializing key metadata")?;
+    std::fs::write(dir.join("pqp.conf"), &conf_toml).context("writing key config")?;
 
     Ok(meta)
 }
@@ -478,8 +431,8 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: "BASE64".into(),
     };
-    let conf_json = toml::to_string_pretty(&meta)?;
-    std::fs::write(dir.join("pqp.conf"), &conf_json)?;
+    let conf_toml = toml::to_string_pretty(&meta)?;
+    std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
 
     Ok(key_id)
 }
@@ -509,8 +462,8 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             sign_algorithm: "ML-DSA-65".into(),
             encoding_algorithm: "BASE64".into(),
         };
-        let conf_json = toml::to_string_pretty(&meta)?;
-        std::fs::write(&metadata_path, &conf_json)?;
+        let conf_toml = toml::to_string_pretty(&meta)?;
+        std::fs::write(&metadata_path, &conf_toml)?;
     }
 
     std::fs::write(dir.join("pqp-public.der"), &decoded)?;
