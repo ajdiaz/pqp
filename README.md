@@ -122,22 +122,40 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 ### ⚙️ Global configuration file
 
-`pqp` reads `~/.pqp/pqp.toml` if it exists. Set default options per command with TOML sections; CLI flags always win.
+`pqp` reads `~/.pqp/pqp.toml` if it exists. Set default options per command with TOML sections; CLI flags always win over config file values.
+
+**Available options:**
+
+| Section | Key | Values | Default | Trade-offs |
+|---|---|---|---|---|
+| `[gen-key]` | `kem` | `ML-KEM-512`, `ML-KEM-768`, `ML-KEM-1024` | `ML-KEM-768` | 512 = fastest/smallest, 1024 = max security but 2× size |
+| `[gen-key]` | `dsa` | `ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87` | `ML-DSA-65` | 44 = compact & fast, 87 = max security but 2× signature size |
+| `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller but less universal |
+| `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | `table` human-friendly, `no-headers` for scripts, `json` for programs |
+| `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd = best speed/ratio, lzma = best ratio/slowest, none = raw |
+| `[export]` | `format` | `armor`, `pqp` | `armor` | armor = universal pasteable, pqp = self-describing & compact |
+| `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | Only for PQP format; same trade-offs as encrypt |
+
+Example with non-default choices:
 
 ```toml
 [gen-key]
-kem = "ML-KEM-1024"
-dsa = "ML-DSA-87"
+kem = "ML-KEM-1024"    # Maximum quantum security
+dsa = "ML-DSA-87"      # Maximum signature strength
+encoding = "ASCII85"   # Compact export
+
+[list-keys]
+format = "json"        # Machine-readable output
 
 [encrypt]
-compress = "gzip"
+compress = "lzma"      # Best compression, slowest
 
 [export]
-format = "pqp"
-compress = "none"
+format = "pqp"         # Self-describing format
+compress = "none"      # No compression on export
 ```
 
-A sample with all options and comments is at `pqp.toml.sample`.
+A fully commented sample with detailed pros/cons for every value is at [`pqp.toml.sample`](pqp.toml.sample).
 
 ### ⚙️ Per-command options
 

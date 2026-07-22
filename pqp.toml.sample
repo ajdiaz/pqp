@@ -1,41 +1,184 @@
 # pqp configuration file
 # Place at ~/.pqp/pqp.toml
-# Precedence: code defaults < this file < CLI flags
+# Precedence (lowest to highest): code defaults < this file < CLI flags
+#
+# To use a value from this file, simply omit the corresponding CLI flag
+# when running pqp. If both are present, the CLI flag wins.
 
 # ── gen-key ────────────────────────────────────────────────────────────
 # Default algorithm variants and encoding for key generation.
-# CLI flags override these values.
+# CLI flags --kem, --dsa, --encoding override these.
 
 [gen-key]
-# KEM variant: "ML-KEM-512", "ML-KEM-768" (default), or "ML-KEM-1024"
+
+# KEM variant (Key Encapsulation Mechanism).
+# Controls the security level of the public-key encapsulation.
+#
+# Possible values:
+#   "ML-KEM-512"   — AES-128 equivalent security (~NIST Level 1).
+#                    Fastest key generation and encapsulation.
+#                    Smallest key and ciphertext sizes.
+#                    Good for high-volume ephemeral operations
+#                    where speed matters more than long-term security.
+#
+#   "ML-KEM-768"   — AES-192 equivalent security (~NIST Level 3) [default].
+#                    Best balance of security, speed, and size.
+#                    Recommended for general-purpose use.
+#                    Resistant to known quantum attacks for the
+#                    foreseeable future.
+#
+#   "ML-KEM-1024"  — AES-256 equivalent security (~NIST Level 5).
+#                    Maximum quantum resistance.
+#                    Largest keys and ciphertexts (~2× ML-KEM-768).
+#                    Use when classifying data at the highest level
+#                    or when future-proofing against cryptanalytic
+#                    advances.
 kem = "ML-KEM-768"
 
-# DSA variant: "ML-DSA-44", "ML-DSA-65" (default), or "ML-DSA-87"
+# DSA variant (Digital Signature Algorithm).
+# Controls the security level of signatures.
+#
+# Possible values:
+#   "ML-DSA-44"    — NIST Level 2 equivalent security.
+#                    Smallest signatures (~2.4 KB).
+#                    Fastest signing and verification.
+#                    Suitable for resource-constrained environments
+#                    or high-throughput signing.
+#
+#   "ML-DSA-65"    — NIST Level 3 equivalent security [default].
+#                    Good balance of signature size (~3.3 KB),
+#                    speed, and security margin.
+#                    Recommended for general-purpose signing.
+#
+#   "ML-DSA-87"    — NIST Level 5 equivalent security.
+#                    Largest signatures (~4.6 KB).
+#                    Maximum protection against quantum adversaries.
+#                    Use when signature size is not a concern and
+#                    long-term security is paramount.
 dsa = "ML-DSA-65"
 
-# Armor encoding: "BASE64" (default) or "ASCII85"
+# Armor encoding for key export.
+#
+# Possible values:
+#   "BASE64"       — Standard base64 encoding [default].
+#                    Widely compatible with other tools and
+#                    easy to copy-paste into emails or chat.
+#                    Larger output than raw binary but human-
+#                    readable and resilient to transport issues.
+#
+#   "ASCII85"      — More compact than base64 (~25% smaller).
+#                    Used by legacy systems (PDF, PostScript).
+#                    Slightly less universal than base64;
+#                    some tools may not handle it.
 encoding = "BASE64"
 
 # ── list-keys ──────────────────────────────────────────────────────────
 # Default output format for listing keys.
+# CLI flag --format overrides this.
 
 [list-keys]
-# Output format: "table" (default, with column headers), "no-headers" (for scripting), or "json"
+
+# Output format for key listing.
+#
+# Possible values:
+#   "table"        — Formatted columns with headers [default].
+#                    Most readable for humans at a glance.
+#                    Handles alignment automatically.
+#                    Not suitable for script consumption due
+#                    to variable column widths.
+#
+#   "no-headers"   — Space-separated values, one key per line.
+#                    Ideal for scripting (cut, awk, grep).
+#                    No column headers to skip.
+#                    Fields: key-id user-id date type kem-algo sign-algo
+#
+#   "json"         — Machine-readable JSON array.
+#                    Best for programmatic consumption.
+#                    Self-describing field names.
+#                    Requires a JSON parser on the consuming end.
 format = "table"
 
 # ── encrypt ────────────────────────────────────────────────────────────
 # Default compression algorithm for encryption.
+# CLI flag --compress overrides this.
 
 [encrypt]
-# Compression: "none", "zstd" (default, fastest), "gzip", "bzip2", or "lzma"
+
+# Compression algorithm applied to plaintext before encryption.
+# The algorithm name is stored in the file format so decryption
+# auto-detects and decompresses.
+#
+# Possible values:
+#   "none"         — No compression.
+#                    Fastest path. Useful when input is already
+#                    compressed (images, archives, video).
+#                    Avoids wasting CPU cycles on incompressible data.
+#
+#   "zstd"         — Zstandard compression [default].
+#                    Best speed/ratio trade-off for most data.
+#                    Very fast decompression.
+#                    Excellent for text, configs, logs, source code.
+#                    Recommended default for general use.
+#
+#   "gzip"         — GZIP (DEFLATE) compression.
+#                    Universally compatible (gzip everywhere).
+#                    Slightly better ratio than zstd on some data,
+#                    but slower decompression. Good for maximum
+#                    interoperability.
+#
+#   "bzip2"        — BZIP2 compression.
+#                    Better compression ratio than gzip on text.
+#                    Significantly slower than zstd and gzip.
+#                    Use when archive size is critical and
+#                    throughput is not a concern.
+#
+#   "lzma"         — LZMA compression (same algo as 7z/xz).
+#                    Best compression ratio of all options.
+#                    Very slow compression and decompression.
+#                    Use for archival of large, compressible data
+#                    where speed is irrelevant.
 compress = "zstd"
 
 # ── export ─────────────────────────────────────────────────────────────
 # Default output format and compression for key export.
+# CLI flags --format and --compress override these.
 
 [export]
-# Output format: "armor" (default, PEM-style) or "pqp" (self-describing)
+
+# Output format for exported public keys.
+#
+# Possible values:
+#   "armor"        — ASCII-armored PEM-style format [default].
+#                    -----BEGIN PQP PUBLIC KEY <key-id>-----
+#                    Widest compatibility. Easy to email or paste
+#                    into web forms. The de facto interchange format.
+#
+#   "pqp"          — Self-describing AlgorithmList::EncodedPayload.
+#                    Embeds KEM and DSA variant names in the
+#                    algorithm string (e.g.
+#                    ML-KEM-768+ML-DSA-65+ZSTD+BASE64::<payload>).
+#                    Fully self-contained — no sidecar metadata
+#                    needed for re-import. Slightly more compact
+#                    than armor but less human-readable.
 format = "armor"
 
-# Compression for PQP format: "none", "zstd" (default), "gzip", "bzip2", or "lzma"
+# Compression for PQP export format.
+# Only applies when format = "pqp". Ignored for armor format.
+#
+# Possible values:
+#   "none"         — No compression. Fastest. Use when key data
+#                    is already compact enough.
+#
+#   "zstd"         — Zstandard compression [default].
+#                    Best speed/ratio for key material.
+#                    Shrinks the payload significantly for storage
+#                    or transmission.
+#
+#   "gzip"         — GZIP compression. Slightly slower than zstd
+#                    but universally compatible.
+#
+#   "bzip2"        — BZIP2 compression. Better ratio than gzip
+#                    on key material but much slower.
+#
+#   "lzma"         — LZMA compression. Best ratio, slowest.
 compress = "zstd"

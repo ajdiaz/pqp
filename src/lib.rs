@@ -24,20 +24,28 @@
 //!
 //! `pqp` reads `~/.pqp/pqp.toml` if present. Each command section mirrors CLI
 //! options. Precedence (lowest to highest): code defaults < config file < CLI flags.
-//! See `pqp.toml.sample` in the source tree for all available options.
+//! See `pqp.toml.sample` in the source tree for detailed pros/cons of every value.
+//!
+//! **Available options:**
+//!
+//! | Section | Key | Values | Default | Trade-offs |
+//! |---|---|---|---|---|
+//! | `[gen-key]` | `kem` | `ML-KEM-512`, `ML-KEM-768`, `ML-KEM-1024` | `ML-KEM-768` | 512 fastest, 1024 max security but 2× size |
+//! | `[gen-key]` | `dsa` | `ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87` | `ML-DSA-65` | 44 compact, 87 max security but 2× sig size |
+//! | `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller, less universal |
+//! | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | table human, no-headers scripts, json programs |
+//! | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd best speed/ratio, lzma best ratio/slowest |
+//! | `[export]` | `format` | `armor`, `pqp` | `armor` | armor universal, pqp self-describing |
+//! | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | only for PQP format |
 //!
 //! Example `~/.pqp/pqp.toml`:
 //! ```toml
 //! [gen-key]
-//! kem = "ML-KEM-1024"
-//! dsa = "ML-DSA-87"
+//! kem = "ML-KEM-768"
+//! dsa = "ML-DSA-65"
 //!
 //! [encrypt]
-//! compress = "gzip"
-//!
-//! [export]
-//! format = "pqp"
-//! compress = "none"
+//! compress = "zstd"
 //! ```
 //!
 //! # Global flags
