@@ -1,0 +1,379 @@
+.TH PQP "1" "2026-07-27" "pqp 0.1.0" "User Commands"
+.SH NAME
+pqp \- quantum-resistant GPG emulation
+.SH SYNOPSIS
+.B pqp
+[\fI\,GLOBAL OPTIONS\/\fR] \fI\,COMMAND\/\fR [\fI\,ARGS\/\fR]
+.SH DESCRIPTION
+\fBpqp\fR is a CLI tool that emulates GPG's key management, encryption,
+signing, and file format, but using post-quantum asymmetric algorithms
+(ML-KEM / Kyber and ML-DSA / Dilithium) instead of RSA/ECC.
+
+Keys are stored in \fI~/.pqp/keys/\fR.  Secret keys are encrypted on disk
+with Argon2id + XChaCha20-Poly1305.  All commands accept \(oq\-\(cq or omit
+the input positional argument to read from stdin.
+
+.SH GLOBAL OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-dry\-run\fR
+Do nothing; print a dry-run message to stderr and exit with status 0.
+Useful for testing command parsing or previewing which command would be
+executed.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help information.
+
+.SH CONFIGURATION FILE
+\fBpqp\fR reads \fI~/.pqp/pqp.toml\fR if present to set defaults for CLI
+options.  Precedence (lowest to highest): code defaults < config file < CLI
+flags.
+
+Example:
+.PP
+.EX
+[gen\-key]
+kem = "ML\-KEM\-1024"
+dsa = "ML\-DSA\-87"
+
+[encrypt]
+compress = "gzip"
+
+[export]
+format = "pqp"
+compress = "none"
+.EE
+.PP
+A fully commented sample with pros/cons for every value is installed at
+\fIshare/doc/pqp/pqp.toml.sample\fR or available in the source tree.
+Config file support mirrors CLI commands.  New options added to the CLI
+must also be added to the config file system.
+
+.SH COMMANDS
+.SS gen\-key
+Generate a PQ key pair (Kyber + Dilithium).
+.PP
+.B pqp gen\-key \-u\ \fI\,USER\/\fR [\fI\,OPTIONS\/\fR]
+.TP
+\fB\-u\fR, \fB\-\-user\fR \fI\,USER\/\fR
+User ID for the key (required).
+.TP
+\fB\-\-no\-passphrase\fR
+Store the secret key without passphrase encryption.  Use for automated
+workflows where interactive password prompts are not possible.
+.TP
+\fB\-\-kem\fR \fI\,VARIANT\/\fR
+KEM algorithm variant.  Default: \fBML\-KEM\-768\fR.
+.RS
+.TP
+\fBML\-KEM\-512\fR
+AES\-128 equivalent security (NIST Level 1).  Fastest and smallest keys.
+Suitable for high-volume ephemeral operations.
+.TP
+\fBML\-KEM\-768\fR
+AES\-192 equivalent security (NIST Level 3).  Best balance of security,
+speed, and size.  Recommended for general-purpose use.
+.TP
+\fBML\-KEM\-1024\fR
+AES\-256 equivalent security (NIST Level 5).  Maximum quantum resistance.
+Largest keys (\(~2\(mu ML\-KEM\-768).  Use for highest security.
+.RE
+.TP
+\fB\-\-dsa\fR \fI\,VARIANT\/\fR
+Digital signature algorithm variant.  Default: \fBML\-DSA\-65\fR.
+.RS
+.TP
+\fBML\-DSA\-44\fR
+NIST Level 2.  Smallest signatures (\(~2.4 KB).  Fastest signing.
+.TP
+\fBML\-DSA\-65\fR
+NIST Level 3.  Good balance of size (\(~3.3 KB) and speed.
+.TP
+\fBML\-DSA\-87\fR
+NIST Level 5.  Largest signatures (\(~4.6 KB).  Maximum protection.
+.RE
+.TP
+\fB\-\-encoding\fR \fI\,ENC\/\fR
+Encoding for armored export of the key.  Default: \fBBASE64\fR.
+.RS
+.TP
+\fBBASE64\fR
+Standard base64.  Widest compatibility.
+.TP
+\fBASCII85\fR
+~25% more compact than base64.  Less universal.
+.RE
+
+.SS list\-keys
+List keys in the keyring.
+.PP
+.B pqp list\-keys [\fI\,OPTIONS\/\fR]
+.TP
+\fB\-\-format\fR \fI\,FORMAT\/\fR
+Output format.  Default: \fBtable\fR.
+.RS
+.TP
+\fBtable\fR
+Formatted columns with headers.  Most readable for humans.
+.TP
+\fBno\-headers\fR
+Space-separated values, one per line.  Ideal for scripting with
+cut/awk/grep.  Fields: key-id user-id date type kem-algo sign-algo.
+.TP
+\fBjson\fR
+JSON array.  Self-describing field names.  Best for programmatic use.
+.RE
+
+.SS encrypt
+Encrypt a file for a recipient using a KEM + symmetric encryption scheme.
+.PP
+.B pqp encrypt \-r \fI\,RECIPIENT\/\fR \-o \fI\,OUTFILE\/\fR [\fI\,OPTIONS\/\fR] [\fI\,INFILE\/\fR]
+.PP
+If \fI\,INFILE\/\fR is omitted or \(oq\-\(cq, reads from stdin.
+.TP
+\fB\-r\fR, \fB\-\-recipient\fR \fI\,ID\/\fR
+Recipient key ID or user ID (required).
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI\,FILE\/\fR
+Output file path.
+.TP
+\fB\-s\fR, \fB\-\-sign\fR
+Sign the ciphertext with the sender's private key.
+.TP
+\fB\-u\fR, \fB\-\-signer\fR \fI\,ID\/\fR
+Signer key ID or user ID (requires \fB\-\-sign\fR).
+.TP
+\fB\-\-compress\fR \fI\,ALGO\/\fR
+Compression applied to plaintext before encryption.  Default: \fBzstd\fR.
+The algorithm is stored in the file so decrypt auto-detects it.
+.RS
+.TP
+\fBnone\fR
+No compression.  Fastest.  Use when input is already compressed.
+.TP
+\fBzstd\fR
+Zstandard.  Best speed/ratio trade-off.  Recommended default.
+.TP
+\fBgzip\fR
+GZIP.  Slightly better ratio than zstd on some data, slower.
+.TP
+\fBbzip2\fR
+BZIP2.  Better ratio than gzip on text.  Significantly slower.
+.TP
+\fBlzma\fR
+LZMA.  Best compression ratio.  Very slow.  Use for archival.
+.RE
+.PP
+Output file extension: \fI.pqp.enc\fR.
+
+.SS decrypt
+Decrypt a file.
+.PP
+.B pqp decrypt \-o \fI\,OUTFILE\/\fR [\fI\,OPTIONS\/\fR] [\fI\,INFILE\/\fR]
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI\,FILE\/\fR
+Output file path.
+.TP
+\fB\-\-no\-passphrase\fR
+Use empty passphrase.  Skips the prompt for automated workflows.
+.TP
+\fI\,INFILE\/\fR
+Input .pqp.enc file.  Omit or use \(oq\-\(cq for stdin.
+
+.SS sign
+Sign a file with a private key, producing a detached signature.
+.PP
+.B pqp sign \-u \fI\,USER\/\fR \-o \fI\,OUTFILE\/\fR [\fI\,OPTIONS\/\fR] [\fI\,INFILE\/\fR]
+.PP
+The file is hashed with SHA3-256 and the hash is signed with Dilithium.
+Output file extension: \fI.pqp.sig\fR.
+.TP
+\fB\-u\fR, \fB\-\-user\fR \fI\,ID\/\fR
+Signing key ID or user ID.
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI\,FILE\/\fR
+Output signature file path.
+.TP
+\fB\-\-no\-passphrase\fR
+Skip the passphrase prompt (uses empty passphrase).
+
+.SS verify
+Verify a detached signature.
+.PP
+.B pqp verify \fI\,SIGNATURE\/\fR [\fI\,INFILE\/\fR]
+.TP
+\fI\,SIGNATURE\/\fR
+Path to the .pqp.sig signature file.
+.TP
+\fI\,INFILE\/\fR
+Path to the original file.  Omit or use \(oq\-\(cq for stdin.
+
+.SS export
+Export a public key in armored or PQP self-describing format.
+.PP
+.B pqp export \fI\,KEY_ID\/\fR [\fI\,OPTIONS\/\fR]
+.TP
+\fI\,KEY_ID\/\fR
+Key ID or user ID to export.
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI\,FILE\/\fR
+Output file path.
+.TP
+\fB\-\-format\fR \fI\,FORMAT\/\fR
+Output format.  Default: \fBarmor\fR.
+.RS
+.TP
+\fBarmor\fR
+ASCII-armored PEM-style (\(oq\-\-\-\-\-BEGIN PQP PUBLIC KEY...\(cq).
+File extension: \fI.pqp.asc\fR.  Widest compatibility.
+.TP
+\fBpqp\fR
+Self-describing AlgorithmList::EncodedPayload format
+(e.g. \fBML\-KEM\-768+ML\-DSA\-65+ZSTD+BASE64::<payload>\fR).
+File extension: \fI.pqp.pub\fR.  Embeds KEM and DSA variant names
+for interchange without sidecar metadata.
+.RE
+.TP
+\fB\-\-compress\fR \fI\,ALGO\/\fR
+Compression for PQP format.  Ignored for armor.  Default: \fBzstd\fR.
+Same values as encrypt's \fB\-\-compress\fR.
+
+.SS import
+Import a public key from an armored file, PQP format, or URL.
+.PP
+.B pqp import [\fI\,OPTIONS\/\fR] [\fI\,INFILE\/\fR]
+.PP
+Auto-detects format (armor or PQP).  The key is stored in the local
+keyring.  Confirmation is prompted before importing unless
+\fB\-\-dont\-ask\-confirmation\fR is given.
+.TP
+\fI\,INFILE\/\fR
+Armored key file.  Omit or use \(oq\-\(cq for stdin.
+.TP
+\fB\-\-url\fR \fI\,URL\/\fR
+URL to fetch the armored key from.
+.TP
+\fB\-\-dont\-ask\-confirmation\fR
+Skip confirmation prompt.
+
+.SS remove\-key
+Remove a public key (and optionally private key) from the keyring.
+.PP
+.B pqp remove\-key \fI\,KEY_ID\/\fR [\fI\,OPTIONS\/\fR]
+.TP
+\fI\,KEY_ID\/\fR
+Key ID (16-hex directory name) or user ID.  When a user ID is given,
+all keys with that user ID are removed.
+.TP
+\fB\-\-dont\-ask\fR
+Skip the confirmation prompt before removing.
+.TP
+\fB\-\-remove\-private\-key\fR
+Also delete the encrypted secret key on disk.  Without this flag, only
+the public key and metadata are removed.
+
+.SH KEY IDENTIFIER RESOLUTION
+All commands that take a key reference (\fBencrypt \-r\fR, \fBencrypt \-u\fR,
+\fBsign \-u\fR, \fBexport\fR, \fBimport\fR) accept either a key ID
+(16-hex-char directory name) or a user ID (the \fB\-\-user\fR string
+provided during \fBgen\-key\fR).  Lookup checks the directory name first,
+then matches \fBuser_id\fR in \fBpqp.conf\fR metadata.
+
+.SH FILE FORMAT
+All encrypted and signed files use the format:
+.PP
+.EX
+AlgorithmList::EncodedPayload
+.EE
+.PP
+The AlgorithmList is a canonical string of one or more algorithm identifiers
+joined with \(oq+\(cq.  The encoding algorithm is always the final component.
+
+Examples:
+.PP
+.EX
+ML\-KEM+XChaCha20\-Poly1305+BASE64
+ML\-KEM+XChaCha20\-Poly1305+ZSTD+BASE64
+ML\-DSA+SHA3\-256+BASE64
+.EE
+.SS Encrypted files (.pqp.enc)
+The decoded payload contains, in order:
+.PP
+.RS
+1.  KEM ciphertext (Kyber encapsulated key)
+2.  Symmetric nonce (24 bytes for XChaCha20-Poly1305)
+3.  Symmetric ciphertext + authentication tag
+4.  Optional Dilithium signature (if \fB\-s\fR was used)
+.RE
+.SS Signature files (.pqp.sig)
+.RS
+1.  SHA3-256 hash of the original file
+2.  Dilithium signature over the hash
+.RE
+
+.SH FILES
+.TP
+\fI~/.pqp/pqp.toml\fR
+Global configuration file.  Optional.  Provides per-command defaults.
+.TP
+\fI~/.pqp/keys/\fR
+Key storage directory.  Each key pair is stored in a subdirectory
+named by its 16-hex-char key ID.
+.TP
+\fI~/.pqp/keys/\fIKEYID\fB/pqp.conf\fR
+Key metadata (TOML format): key ID, creation date, user ID,
+algorithm identifiers.
+.TP
+\fI~/.pqp/keys/\fIKEYID\fB/pqp-public.der\fR
+Public key bytes (raw DER).
+.TP
+\fI~/.pqp/keys/\fIKEYID\fB/pqp-secret.der\fR
+Secret key bytes, passphrase-encrypted with Argon2id +
+XChaCha20-Poly1305.
+.TP
+\fI.pqp.enc\fR
+Encrypted file output.
+.TP
+\fI.pqp.sig\fR
+Detached signature output.
+.TP
+\fI.pqp.asc\fR
+ASCII-armored public key (export format).
+.TP
+\fI.pqp.pub\fR
+PQP self-describing public key (export format).
+
+.SH EXIT STATUS
+.TP
+0
+Success.
+.TP
+1
+General error (invalid arguments, I/O failure, crypto failure, etc).
+
+.SH EXAMPLES
+.TP
+Generate a key pair
+.B pqp gen\-key \-u "alice@example.com"
+.TP
+Encrypt a file for a recipient
+.B pqp encrypt \-r alice \-o secret.pqp.enc doc.pdf
+.TP
+Decrypt a file
+.B pqp decrypt \-o doc.pdf secret.pqp.enc
+.TP
+Sign and verify
+.B pqp sign \-u alice \-o doc.pdf.pqp.sig doc.pdf
+.br
+.B pqp verify doc.pdf.pqp.sig doc.pdf
+.TP
+Export and import keys
+.B pqp export alice \-o alice.pqp.asc
+.br
+.B pqp import alice.pqp.asc
+
+.SH SEE ALSO
+.BR gpg (1)
+
+.SH AUTHORS
+pqp was written by the pqp contributors.
+Report bugs at https://github.com/ajdiaz/pqp/issues.
