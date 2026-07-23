@@ -626,3 +626,280 @@ fn test_encode_payload_ignores_compression() {
     let decoded = pqp::format::decode_payload(&algorithms, &encoded).unwrap();
     assert_eq!(data.to_vec(), decoded);
 }
+
+fn tmp_home(name: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("pqp_int_{}", name));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.to_string_lossy().to_string()
+}
+
+fn get_key_id(pqp_home_val: &str) -> String {
+    let output = Command::new(pqp_binary())
+        .args(["list-keys", "--format", "no-headers"])
+        .env("PQP_HOME", pqp_home_val)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "list-keys failed");
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string()
+}
+
+fn gen_expired_key(pqp_home_val: &str, user: &str) -> String {
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            user,
+            "--no-passphrase",
+            "--expiration-date",
+            "2000-01-01",
+        ])
+        .env("PQP_HOME", pqp_home_val)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key for expired key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    get_key_id(pqp_home_val)
+}
+
+#[test]
+fn test_cli_gen_key_expiration_relative() {
+    let home = tmp_home("gen_exp_rel");
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "exp-rel@example.com",
+            "--no-passphrase",
+            "--expiration-date",
+            "30d",
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key with --expiration-date 30d failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("exp-rel@example.com"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("expires"),
+        "output should show expiration: {}",
+        stdout
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_gen_key_expiration_absolute() {
+    let home = tmp_home("gen_exp_abs");
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "exp-abs@example.com",
+            "--no-passphrase",
+            "--expiration-date",
+            "2035-12-31",
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key with --expiration-date 2035-12-31 failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2035-12-31"),
+        "output should show year 2035: {}",
+        stdout
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_gen_key_default_expiration() {
+    let home = tmp_home("gen_exp_def");
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "exp-def@example.com", "--no-passphrase"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key default failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("expires"),
+        "output should show expiration: {}",
+        stdout
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_encrypt_rejects_expired_key() {
+    let home = tmp_home("enc_exp_rej");
+    let key_id = gen_expired_key(&home, "expired@example.com");
+
+    let plain_path = std::path::Path::new(&home).join("data.txt");
+    std::fs::write(&plain_path, b"test data").unwrap();
+
+    let enc_out = std::path::Path::new(&home).join("out.pqp.enc");
+    let output = Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "-o",
+            enc_out.to_str().unwrap(),
+            plain_path.to_str().unwrap(),
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "encrypt should reject expired key, but succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expired"),
+        "stderr should mention expired: {}",
+        stderr
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_encrypt_allow_expired() {
+    let home = tmp_home("enc_exp_allow");
+    let key_id = gen_expired_key(&home, "exp-allowed@example.com");
+
+    let plain_path = std::path::Path::new(&home).join("data.txt");
+    std::fs::write(&plain_path, b"test data").unwrap();
+
+    let enc_out = std::path::Path::new(&home).join("out.pqp.enc");
+    let output = Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "--allow-expired",
+            "-o",
+            enc_out.to_str().unwrap(),
+            plain_path.to_str().unwrap(),
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "encrypt with --allow-expired should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expired"),
+        "stderr should warn about expired: {}",
+        stderr
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_sign_rejects_expired_key() {
+    let home = tmp_home("sig_exp_rej");
+    let key_id = gen_expired_key(&home, "sig-expired@example.com");
+
+    let data_path = std::path::Path::new(&home).join("data.txt");
+    std::fs::write(&data_path, b"sign me").unwrap();
+
+    let sig_out = std::path::Path::new(&home).join("data.txt.pqp.sig");
+    let output = Command::new(pqp_binary())
+        .args([
+            "sign",
+            "-u",
+            &key_id,
+            "--no-passphrase",
+            "-o",
+            sig_out.to_str().unwrap(),
+            data_path.to_str().unwrap(),
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "sign should reject expired key, but succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expired"),
+        "stderr should mention expired: {}",
+        stderr
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_sign_allow_expired() {
+    let home = tmp_home("sig_exp_allow");
+    let key_id = gen_expired_key(&home, "sig-exp-allowed@example.com");
+
+    let data_path = std::path::Path::new(&home).join("data.txt");
+    std::fs::write(&data_path, b"sign me anyway").unwrap();
+
+    let sig_out = std::path::Path::new(&home).join("data.txt.pqp.sig");
+    let output = Command::new(pqp_binary())
+        .args([
+            "sign",
+            "-u",
+            &key_id,
+            "--no-passphrase",
+            "--allow-expired",
+            "-o",
+            sig_out.to_str().unwrap(),
+            data_path.to_str().unwrap(),
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "sign with --allow-expired should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("expired"),
+        "stderr should warn about expired: {}",
+        stderr
+    );
+
+    let output = Command::new(pqp_binary())
+        .args([
+            "verify",
+            sig_out.to_str().unwrap(),
+            data_path.to_str().unwrap(),
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "verify should succeed for signature made with --allow-expired: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Verified"));
+    let _ = std::fs::remove_dir_all(&home);
+}

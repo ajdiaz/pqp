@@ -42,10 +42,12 @@ pqp gen-key -u "alice@example.com"
 # Generated key pair: key-id=a1b2c3d4e5f6a7b8
 ```
 
-Custom variants and no-passphrase mode:
+Custom variants, no-passphrase, and expiration:
 
 ```bash
 pqp gen-key -u "bot@example.com" --no-passphrase --kem ML-KEM-1024 --dsa ML-DSA-87
+pqp gen-key -u "short-term@example.com" --expiration-date 30d
+pqp gen-key -u "long-term@example.com" --expiration-date 2035-12-31
 ```
 
 ### Encrypt a file
@@ -67,6 +69,12 @@ Sign the ciphertext with your key:
 pqp encrypt -r bob -o msg.pqp.enc -s msg.txt
 ```
 
+Allow using an expired recipient key (warns, then proceeds):
+
+```bash
+pqp encrypt -r alice -o outdated.pqp.enc --allow-expired doc.txt
+```
+
 ### Decrypt a file
 
 ```bash
@@ -80,6 +88,9 @@ pqp decrypt -o report.pdf report.pdf.pqp.enc
 ```bash
 pqp sign -u a1b2c3d4e5f6a7b8 -o contract.pdf.pqp.sig contract.pdf
 # Signed: contract.pdf.pqp.sig
+
+pqp sign -u expired-key -o legacy.pqp.sig --allow-expired doc.txt
+# Warning: signing key expired, proceeding...
 
 pqp verify contract.pdf.pqp.sig contract.pdf
 # Verified: signed by key-id=a1b2c3d4e5f6a7b8
@@ -142,6 +153,10 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[gen-key]` | `kem` | `ML-KEM-512`, `ML-KEM-768`, `ML-KEM-1024` | `ML-KEM-768` | 512 = fastest/smallest, 1024 = max security but 2× size |
 | `[gen-key]` | `dsa` | `ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87` | `ML-DSA-65` | 44 = compact & fast, 87 = max security but 2× signature size |
 | `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller but less universal |
+| `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
+| `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
+| `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
+| `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | `table` human-friendly, `no-headers` for scripts, `json` for programs |
 | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd = best speed/ratio, lzma = best ratio/slowest, none = raw |
 | `[export]` | `format` | `armor`, `pqp` | `armor` | armor = universal pasteable, pqp = self-describing & compact |
@@ -170,15 +185,15 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 
 ### ⚙️ Per-command options
 
-**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>`
+**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>`
 
 **list-keys:** `--format <table|no-headers|json>`
 
-**encrypt:** `-r <recipient>` · `-o <outfile>` · `--compress <algo>` · `--sign` · `--signer <user>`
+**encrypt:** `-r <recipient>` · `-o <outfile>` · `--compress <algo>` · `--sign` · `--signer <user>` · `--allow-expired`
 
 **decrypt:** `-o <outfile>` · `--no-passphrase`
 
-**sign:** `-u <user>` · `-o <outfile>` · `--no-passphrase`
+**sign:** `-u <user>` · `-o <outfile>` · `--no-passphrase` · `--allow-expired`
 
 **verify:** `<signature>` · `[infile]`
 

@@ -145,6 +145,65 @@ fn test_key_info_fields() {
 }
 
 #[test]
+fn test_key_expiration_relative() {
+    let _d = test_keyring_dir("exp_rel");
+    let meta = pqp::keyring::generate_key(
+        "exp-rel@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "30d",
+    )
+    .unwrap();
+    assert!(!meta.expiration_date.is_empty());
+    assert!(meta.expiration_date.contains('T'));
+    assert!(meta.expiration_date.ends_with('Z'));
+    assert_eq!(meta.expiration_date.len(), 20);
+    assert!(!pqp::expiry::is_expired(&meta.expiration_date));
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].expiration_date, meta.expiration_date);
+}
+
+#[test]
+fn test_key_expiration_absolute() {
+    let _d = test_keyring_dir("exp_abs");
+    let meta = pqp::keyring::generate_key(
+        "exp-abs@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "2030-06-15",
+    )
+    .unwrap();
+    assert!(meta.expiration_date.starts_with("2030-06-15"));
+    assert!(!pqp::expiry::is_expired(&meta.expiration_date));
+    let keys = pqp::keyring::list_keys().unwrap();
+    assert_eq!(keys[0].expiration_date, meta.expiration_date);
+}
+
+#[test]
+fn test_key_expired_check() {
+    let _d = test_keyring_dir("exp_chk");
+    let meta = pqp::keyring::generate_key(
+        "exp-chk@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "2000-01-01",
+    )
+    .unwrap();
+    assert!(pqp::expiry::is_expired(&meta.expiration_date));
+    assert!(pqp::keyring::check_key_expired(&meta.key_id).unwrap());
+}
+
+#[test]
 fn test_resolve_key_id_by_key_id() {
     let _d = test_keyring_dir("resolve_id");
     let meta = pqp::keyring::generate_key(

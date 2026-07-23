@@ -101,10 +101,7 @@ pub enum Commands {
             help = "Compression algorithm: none, zstd, gzip, bzip2, lzma"
         )]
         compress: String,
-        #[arg(
-            long = "allow-expired",
-            help = "Allow using an expired key"
-        )]
+        #[arg(long = "allow-expired", help = "Allow using an expired key")]
         allow_expired: bool,
     },
     /// Decrypt a file.
@@ -128,10 +125,7 @@ pub enum Commands {
         input: Option<String>,
         #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
         no_passphrase: bool,
-        #[arg(
-            long = "allow-expired",
-            help = "Allow using an expired key"
-        )]
+        #[arg(long = "allow-expired", help = "Allow using an expired key")]
         allow_expired: bool,
     },
     /// Verify a signature.

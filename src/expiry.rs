@@ -69,6 +69,9 @@ fn days_to_date(days: u64) -> (u64, u64, u64) {
 fn parse_relative(input: &str) -> Option<String> {
     let (num_str, unit) = input.split_at(input.len().saturating_sub(1));
     let n: u64 = num_str.parse().ok()?;
+    if n == 0 {
+        return None;
+    }
     let now = now_secs();
     let secs = match unit {
         "y" => now.checked_add(n.checked_mul(365 * 86400)?)?,
@@ -223,5 +226,65 @@ mod tests {
     fn test_parse_absolute_edge() {
         let result = parse_expiration("1970-01-01").unwrap();
         assert!(result.starts_with("1970-01-01"));
+    }
+
+    #[test]
+    fn test_parse_single_digit_d() {
+        let result = parse_expiration("1d").unwrap();
+        let secs = iso8601_to_secs(&result).unwrap();
+        let diff = secs - now_secs();
+        assert!(diff > 0 && diff < 2 * 86400);
+    }
+
+    #[test]
+    fn test_parse_large_y() {
+        let result = parse_expiration("100y").unwrap();
+        let secs = iso8601_to_secs(&result).unwrap();
+        assert!(secs > now_secs() + 50 * 365 * 86400);
+    }
+
+    #[test]
+    fn test_parse_zero_n() {
+        assert!(parse_expiration("0d").is_err());
+        assert!(parse_expiration("0y").is_err());
+    }
+
+    #[test]
+    fn test_parse_absolute_epoch_end() {
+        let result = parse_expiration("1970-01-01").unwrap();
+        assert_eq!(&result[11..], "23:59:59Z");
+    }
+
+    #[test]
+    fn test_parse_absolute_today_roundtrip() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let days = now / 86400;
+        let (y, m, d) = days_to_date(days);
+        let date_str = format!("{:04}-{:02}-{:02}", y, m, d);
+        let result = parse_expiration(&date_str).unwrap();
+        assert!(result.starts_with(&date_str));
+    }
+
+    #[test]
+    fn test_is_expired_edge_cases() {
+        assert!(is_expired("1970-01-01T00:00:00Z"));
+        assert!(!is_expired("9999-12-31T23:59:59Z"));
+    }
+
+    #[test]
+    fn test_parse_output_format() {
+        let result = parse_expiration("5y").unwrap();
+        let result2 = parse_expiration("30d").unwrap();
+        let result3 = parse_expiration("2099-01-01").unwrap();
+        for r in &[result, result2, result3] {
+            assert_eq!(&r[4..5], "-", "expected - at position 4: {r}");
+            assert_eq!(&r[7..8], "-", "expected - at position 7: {r}");
+            assert_eq!(&r[10..11], "T", "expected T at position 10: {r}");
+            assert_eq!(&r[19..20], "Z", "expected Z at end: {r}");
+        }
     }
 }

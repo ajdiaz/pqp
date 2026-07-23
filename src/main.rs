@@ -116,8 +116,7 @@ fn main() -> Result<()> {
             dsa = config::apply_str(&dsa, cmd_cfg, "dsa", "ML-DSA-65");
             encoding = config::apply_str(&encoding, cmd_cfg, "encoding", "BASE64");
             compress = config::apply_str(&compress, cmd_cfg, "compress", "none");
-            expiration_date =
-                config::apply_str(&expiration_date, cmd_cfg, "expiration-date", "5y");
+            expiration_date = config::apply_str(&expiration_date, cmd_cfg, "expiration-date", "5y");
             let kem_variant =
                 KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
             let dsa_variant =
@@ -238,7 +237,23 @@ fn main() -> Result<()> {
                             .max()
                             .unwrap_or(20)
                             .max(8);
-                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14 + 1 + 10 + 1 + 10 + 1 + 10;
+                        let total = 16
+                            + 1
+                            + uid_width
+                            + 1
+                            + 26
+                            + 1
+                            + 8
+                            + 1
+                            + 14
+                            + 1
+                            + 14
+                            + 1
+                            + 10
+                            + 1
+                            + 10
+                            + 1
+                            + 10;
                         println!(
                             "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
                             "Key ID",
@@ -297,8 +312,7 @@ fn main() -> Result<()> {
             }
             let cmd_cfg = config::section(&cfg, "encrypt");
             compress = config::apply_str(&compress, cmd_cfg, "compress", "zstd");
-            let allow_expired =
-                config::apply_bool(allow_expired, cmd_cfg, "allow-expired", false);
+            let allow_expired = config::apply_bool(allow_expired, cmd_cfg, "allow-expired", false);
             let recipient_id =
                 keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
 

@@ -139,14 +139,28 @@ mod tests {
 
     #[test]
     fn test_load_returns_empty_when_no_file() {
-        let original = std::env::var_os("HOME");
+        let original_home = std::env::var_os("HOME");
+        let original_pqp = std::env::var_os("PQP_HOME");
+        let original_xdg = std::env::var_os("XDG_CONFIG_HOME");
         std::env::set_var("HOME", "/tmp/pqp-test-nonexistent-home-XXXX");
+        std::env::remove_var("PQP_HOME");
+        std::env::remove_var("XDG_CONFIG_HOME");
         let cfg = load().unwrap();
         assert!(cfg.is_empty());
-        if let Some(h) = original {
+        if let Some(h) = original_home {
             std::env::set_var("HOME", h);
         } else {
             std::env::remove_var("HOME");
+        }
+        if let Some(p) = original_pqp {
+            std::env::set_var("PQP_HOME", p);
+        } else {
+            std::env::remove_var("PQP_HOME");
+        }
+        if let Some(x) = original_xdg {
+            std::env::set_var("XDG_CONFIG_HOME", x);
+        } else {
+            std::env::remove_var("XDG_CONFIG_HOME");
         }
     }
 
