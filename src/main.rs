@@ -104,6 +104,7 @@ fn main() -> Result<()> {
             mut kem,
             mut dsa,
             mut encoding,
+            mut compress,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would gen-key: no action taken");
@@ -113,6 +114,7 @@ fn main() -> Result<()> {
             kem = config::apply_str(&kem, cmd_cfg, "kem", "ML-KEM-768");
             dsa = config::apply_str(&dsa, cmd_cfg, "dsa", "ML-DSA-65");
             encoding = config::apply_str(&encoding, cmd_cfg, "encoding", "BASE64");
+            compress = config::apply_str(&compress, cmd_cfg, "compress", "none");
             let kem_variant =
                 KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
             let dsa_variant =
@@ -130,14 +132,21 @@ fn main() -> Result<()> {
                 }
                 passphrase
             };
-            let meta =
-                keyring::generate_key(&user, &passphrase, kem_variant, dsa_variant, encoding)?;
+            let meta = keyring::generate_key(
+                &user,
+                &passphrase,
+                kem_variant,
+                dsa_variant,
+                encoding,
+                &compress,
+            )?;
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);
             println!("  created: {}", meta.created_at);
             println!("  kem: {}", meta.kem_algorithm);
             println!("  dsa: {}", meta.sign_algorithm);
             println!("  encoding: {}", meta.encoding_algorithm);
+            println!("  compress: {}", meta.compress_algorithm);
         }
         Commands::ListKeys { mut format } => {
             if cli.dry_run {
@@ -170,7 +179,8 @@ fn main() -> Result<()> {
     "has_secret": {},
     "type": "{}",
     "kem_algorithm": "{}",
-    "sign_algorithm": "{}"
+    "sign_algorithm": "{}",
+    "compress_algorithm": "{}"
   }}"#,
                                 key.key_id,
                                 key.user_id,
@@ -180,6 +190,7 @@ fn main() -> Result<()> {
                                 kt,
                                 key.kem_algorithm,
                                 key.sign_algorithm,
+                                key.compress_algorithm,
                             ));
                         }
                         println!("[\n{}\n]", items.join(",\n"));
@@ -194,13 +205,14 @@ fn main() -> Result<()> {
                                 "pub"
                             };
                             println!(
-                                "{} {} {} {} {} {}",
+                                "{} {} {} {} {} {} {}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
                                 kt,
                                 key.kem_algorithm,
                                 key.sign_algorithm,
+                                key.compress_algorithm,
                             );
                         }
                     }
@@ -212,15 +224,16 @@ fn main() -> Result<()> {
                             .max()
                             .unwrap_or(20)
                             .max(8);
-                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14;
+                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14 + 1 + 10;
                         println!(
-                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14}",
+                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10}",
                             "Key ID",
                             "User ID",
                             "Created",
                             "Type",
                             "KEM",
                             "Sign",
+                            "Compress",
                             uid_w = uid_width,
                         );
                         println!("{}", "-".repeat(total));
@@ -233,13 +246,14 @@ fn main() -> Result<()> {
                                 "pub"
                             };
                             println!(
-                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14}",
+                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
                                 kt,
                                 key.kem_algorithm,
                                 key.sign_algorithm,
+                                key.compress_algorithm,
                                 uid_w = uid_width,
                             );
                         }

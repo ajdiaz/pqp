@@ -17,6 +17,7 @@ complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l no-passphrase -d 
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l kem -d "KEM algorithm variant" -r -xa "ML-KEM-512 ML-KEM-768 ML-KEM-1024"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l dsa -d "Digital signature algorithm variant" -r -xa "ML-DSA-44 ML-DSA-65 ML-DSA-87"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l encoding -d "Encoding for armored output" -r -xa "BASE64 ASCII85"
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l compress -d "Default compression algorithm preference" -r -xa "none zstd gzip bzip2 lzma"
 
 # --- list-keys ---
 complete -c pqp -f -n "__fish_use_subcommand" -a list-keys -d "List keys in the keyring"

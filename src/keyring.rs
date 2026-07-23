@@ -32,10 +32,16 @@ pub struct KeyMetadata {
     pub sign_algorithm: String,
     #[serde(default = "default_encoding")]
     pub encoding_algorithm: String,
+    #[serde(default = "default_compress")]
+    pub compress_algorithm: String,
 }
 
 fn default_encoding() -> String {
     "BASE64".into()
+}
+
+fn default_compress() -> String {
+    "none".into()
 }
 
 /// Enriched key information including key type and algorithm details.
@@ -50,6 +56,8 @@ pub struct KeyInfo {
     pub sign_algorithm: String,
     #[serde(default = "default_encoding")]
     pub encoding_algorithm: String,
+    #[serde(default = "default_compress")]
+    pub compress_algorithm: String,
 }
 
 /// XDG data directory for pqp (`~/.local/share/pqp/`), with
@@ -210,6 +218,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 kem_algorithm: meta.kem_algorithm,
                 sign_algorithm: meta.sign_algorithm,
                 encoding_algorithm: meta.encoding_algorithm,
+                compress_algorithm: meta.compress_algorithm,
             });
         }
     }
@@ -227,6 +236,7 @@ pub fn generate_key(
     kem_variant: KemVariant,
     dsa_variant: DsaVariant,
     encoding: Encoding,
+    compress: &str,
 ) -> Result<KeyMetadata> {
     let keypair = keygen::generate(kem_variant, dsa_variant)?;
 
@@ -240,6 +250,7 @@ pub fn generate_key(
         kem_algorithm: kem_variant.as_str().into(),
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: encoding.as_str().into(),
+        compress_algorithm: compress.to_string(),
     };
 
     let dir = keys_dir()?.join(&key_id);
@@ -447,6 +458,7 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         kem_algorithm: kem_variant.as_str().into(),
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: "BASE64".into(),
+        compress_algorithm: "none".into(),
     };
     let conf_toml = toml::to_string_pretty(&meta)?;
     std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
@@ -478,6 +490,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             kem_algorithm: "ML-KEM-768".into(),
             sign_algorithm: "ML-DSA-65".into(),
             encoding_algorithm: "BASE64".into(),
+            compress_algorithm: "none".into(),
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;

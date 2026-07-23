@@ -115,6 +115,27 @@ Standard base64.  Widest compatibility.
 \fBASCII85\fR
 ~25% more compact than base64.  Less universal.
 .RE
+.TP
+\fB\-\-compress\fR \fI\,ALGO\/\fR
+Default compression algorithm preference stored in key metadata.
+Default: \fBnone\fR.
+.RS
+.TP
+\fBnone\fR
+No preference (commands use their own defaults).
+.TP
+\fBzstd\fR
+Zstandard.  Fast and good compression ratio.
+.TP
+\fBgzip\fR
+GZIP.  Slower than zstd, more universally compatible.
+.TP
+\fBbzip2\fR
+BZIP2.  Better ratio than gzip on text.  Slower.
+.TP
+\fBlzma\fR
+LZMA.  Best ratio, slowest.
+.RE
 
 .SS list\-keys
 List keys in the keyring.
@@ -130,7 +151,7 @@ Formatted columns with headers.  Most readable for humans.
 .TP
 \fBno\-headers\fR
 Space-separated values, one per line.  Ideal for scripting with
-cut/awk/grep.  Fields: key-id user-id date type kem-algo sign-algo.
+cut/awk/grep.  Fields: key-id user-id date type kem-algo sign-algo compress.
 .TP
 \fBjson\fR
 JSON array.  Self-describing field names.  Best for programmatic use.

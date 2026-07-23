@@ -47,8 +47,12 @@ _pqp() {
                     COMPREPLY=($(compgen -W 'BASE64 ASCII85' -- "$cur"))
                     return
                     ;;
+                --compress)
+                    COMPREPLY=($(compgen -W 'none zstd gzip bzip2 lzma' -- "$cur"))
+                    return
+                    ;;
                 *)
-                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --no-passphrase --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --compress --no-passphrase --help -h' -- "$cur"))
                     return
                     ;;
             esac

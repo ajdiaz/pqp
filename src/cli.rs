@@ -51,6 +51,12 @@ pub enum Commands {
             help = "Encoding for armored output: BASE64, ASCII85"
         )]
         encoding: String,
+        #[arg(
+            long = "compress",
+            default_value = "none",
+            help = "Default compression algorithm: none, zstd, gzip, bzip2, lzma"
+        )]
+        compress: String,
     },
     /// List keys in the keyring.
     #[command(name = "list-keys")]

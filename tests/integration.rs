@@ -18,6 +18,7 @@ fn test_gen_key_and_list_keys() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -240,6 +241,7 @@ fn test_cli_sign_verify_stdin() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -296,6 +298,7 @@ fn test_gen_key_no_passphrase() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     assert_eq!(meta.user_id, "nopass@example.com");

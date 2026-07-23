@@ -61,6 +61,7 @@ fn test_generate_and_export() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -87,6 +88,7 @@ fn test_generate_and_load_keys() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -122,6 +124,7 @@ fn test_key_info_fields() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -147,6 +150,7 @@ fn test_resolve_key_id_by_key_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -163,6 +167,7 @@ fn test_resolve_key_id_by_user_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -187,6 +192,7 @@ fn test_key_info_public_only_key() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -206,6 +212,7 @@ fn test_import_with_confirmation() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -238,6 +245,7 @@ fn test_remove_key_public_only() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -266,6 +274,7 @@ fn test_remove_key_public_and_private() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -295,6 +304,7 @@ fn test_resolve_key_ids_by_key_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -311,6 +321,7 @@ fn test_resolve_key_ids_by_user_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -319,6 +330,7 @@ fn test_resolve_key_ids_by_user_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -343,6 +355,7 @@ fn test_cli_remove_key_public_only() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -371,6 +384,7 @@ fn test_cli_remove_key_public_and_private() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -399,6 +413,7 @@ fn test_cli_remove_key_by_user_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -407,6 +422,7 @@ fn test_cli_remove_key_by_user_id() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -448,6 +464,7 @@ fn test_list_keys_json_format() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -473,6 +490,7 @@ fn test_list_keys_no_headers_format() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -497,6 +515,7 @@ fn test_import_from_stdin() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -529,6 +548,7 @@ fn test_export_public_key_pqp_format() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -560,6 +580,7 @@ fn test_import_public_key_from_pqp() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -596,6 +617,7 @@ fn test_cli_export_pqp_format() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -633,6 +655,7 @@ fn test_cli_import_pqp_format() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -666,6 +689,7 @@ fn test_pqp_format_roundtrip() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 
@@ -704,6 +728,7 @@ fn test_pqp_format_compressed_roundtrip() {
             KemVariant::MlKem768,
             DsaVariant::MlDsa65,
             Encoding::Base64,
+            "none",
         )
         .unwrap();
 
@@ -740,6 +765,7 @@ fn test_cli_export_pqp_with_compression() {
         KemVariant::MlKem768,
         DsaVariant::MlDsa65,
         Encoding::Base64,
+        "none",
     )
     .unwrap();
 

@@ -72,6 +72,34 @@ dsa = "ML-DSA-65"
 #                    some tools may not handle it.
 encoding = "BASE64"
 
+# Default compression algorithm preference stored in the key metadata.
+# This preference can be used by export and other commands when no
+# explicit --compress flag is given. Stored as metadata only; the
+# actual key material is not compressed during generation.
+#
+# Possible values:
+#   "none"         — No compression preference [default].
+#                    Commands will use their own default compression
+#                    (e.g. export uses zstd for PQP format, encrypt
+#                    uses zstd). Choose this if you want commands to
+#                    apply their own defaults.
+#
+#   "zstd"         — Zstandard compression.
+#                    Sets zstd as the preferred compression for this
+#                    key. Fast and good compression ratio.
+#
+#   "gzip"         — GZIP compression.
+#                    Slightly slower than zstd but more universally
+#                    compatible.
+#
+#   "bzip2"        — BZIP2 compression.
+#                    Better ratio than gzip on text. Slower.
+#
+#   "lzma"         — LZMA compression.
+#                    Best ratio, slowest. Use when archive size
+#                    is critical.
+compress = "none"
+
 # ── list-keys ──────────────────────────────────────────────────────────
 # Default output format for listing keys.
 # CLI flag --format overrides this.

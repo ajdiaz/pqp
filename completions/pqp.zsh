@@ -70,7 +70,8 @@ _pqp_gen_key() {
         '--no-passphrase[Generate key without a passphrase]' \
         '--kem[KEM algorithm variant]:variant:(ML-KEM-512 ML-KEM-768 ML-KEM-1024)' \
         '--dsa[Digital signature algorithm variant]:variant:(ML-DSA-44 ML-DSA-65 ML-DSA-87)' \
-        '--encoding[Encoding for armored output]:encoding:(BASE64 ASCII85)'
+        '--encoding[Encoding for armored output]:encoding:(BASE64 ASCII85)' \
+        '--compress[Default compression algorithm preference]:compress:(none zstd gzip bzip2 lzma)'
 }
 
 _pqp_list_keys() {
