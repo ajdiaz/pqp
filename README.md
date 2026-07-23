@@ -129,6 +129,10 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 | Config | `~/.config/pqp/pqp.toml` | `~/.pqp/pqp.toml` |
 | Keys | `~/.local/share/pqp/keys/` | `~/.pqp/keys/` |
 
+Set `PQP_HOME` environment variable to override both XDG and legacy paths.
+When set, pqp uses the legacy structure inside that directory
+(`$PQP_HOME/.pqp/pqp.toml` for config, `$PQP_HOME/.pqp/keys/` for keys).
+
 Set default options per command with TOML sections in the config file; CLI flags always win over config file values.
 
 **Available options:**

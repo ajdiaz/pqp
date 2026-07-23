@@ -52,9 +52,14 @@ pub struct KeyInfo {
     pub encoding_algorithm: String,
 }
 
-/// XDG data directory for pqp (`~/.local/share/pqp/`), falling back to
-/// `~/.pqp/` if the legacy path exists for backward compatibility.
+/// XDG data directory for pqp (`~/.local/share/pqp/`), with
+/// `PQP_HOME` override (`$PQP_HOME/.pqp/`) and legacy fallback
+/// (`~/.pqp/`) for backward compatibility.
 fn pqp_dir() -> Result<PathBuf> {
+    // PQP_HOME takes precedence over XDG
+    if let Ok(pqp_home) = std::env::var("PQP_HOME") {
+        return Ok(PathBuf::from(pqp_home).join(".pqp"));
+    }
     let xdg = dirs::data_dir()
         .context("cannot determine XDG data directory")?
         .join("pqp");

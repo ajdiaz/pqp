@@ -23,9 +23,9 @@
 //! # Global configuration file
 //!
 //! `pqp` reads `~/.config/pqp/pqp.toml` (XDG config) if present, falling
-//! back to `~/.pqp/pqp.toml` for backward compatibility. Each command
-//! section mirrors CLI options. Precedence (lowest to highest): code
-//! defaults < config file < CLI flags.
+//! back to `~/.pqp/pqp.toml` for backward compatibility. The `PQP_HOME`
+//! environment variable overrides both, using the legacy structure inside
+//! the specified directory (`$PQP_HOME/.pqp/pqp.toml`).
 //! See `pqp.toml.sample` in the source tree for detailed pros/cons of
 //! every value.
 //!
@@ -151,9 +151,8 @@
 //!
 //! Keys are stored in `~/.local/share/pqp/keys/<key-id>/` (XDG data dir),
 //! falling back to `~/.pqp/keys/<key-id>/` for backward compatibility.
-//! Secret keys are encrypted with Argon2id + XChaCha20-Poly1305.
-//! All commands accept `-` or omit the input positional argument to read
-//! from stdin.
+//! The `PQP_HOME` environment variable overrides both, using the legacy
+//! structure inside the specified directory (`$PQP_HOME/.pqp/keys/`).
 //!
 //! Identifiers (key ID or user ID) are resolved by checking directory names
 //! first, then matching `user_id` in `pqp.conf` metadata.

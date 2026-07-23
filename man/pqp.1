@@ -28,6 +28,17 @@ Print help information.
 .SH CONFIGURATION FILE
 \fBpqp\fR reads \fI~/.config/pqp/pqp.toml\fR (XDG config directory) if
 present, falling back to \fI~/.pqp/pqp.toml\fR for backward compatibility.
+
+.SH ENVIRONMENT VARIABLES
+.TP
+\fBPQP_HOME\fR
+If set, overrides the XDG paths entirely.  Keys will be stored under
+\fI$PQP_HOME/.pqp/keys/\fR and config read from \fI$PQP_HOME/.pqp/pqp.toml\fR.
+This is useful for running multiple isolated pqp instances.
+
+.TP
+\fBHOME\fR
+Used as fallback when XDG directories cannot be determined.
 Precedence (lowest to highest): code defaults < config file < CLI flags.
 
 Example:
@@ -316,11 +327,12 @@ The decoded payload contains, in order:
 .TP
 \fI~/.config/pqp/pqp.toml\fR
 Global configuration file (XDG config).  Optional.  Fallback:
-\fI~/.pqp/pqp.toml\fR.
+\fI~/.pqp/pqp.toml\fR.  Overridden by \fBPQP_HOME\fR.
 .TP
 \fI~/.local/share/pqp/keys/\fR
 Key storage directory (XDG data).  Each key pair is stored in a subdirectory
 named by its 16-hex-char key ID.  Fallback: \fI~/.pqp/keys/\fR.
+Overridden by \fBPQP_HOME\fR.
 .TP
 \fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp.conf\fR
 Key metadata (TOML format): key ID, creation date, user ID,

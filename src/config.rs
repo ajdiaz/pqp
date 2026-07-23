@@ -28,9 +28,16 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use toml::Value;
 
-/// Path to the configuration file — XDG config (`~/.config/pqp/pqp.toml`)
-/// with fallback to legacy `~/.pqp/pqp.toml` for backward compatibility.
+/// Path to the configuration file — checks in order:
+/// 1. `PQP_HOME` env var → `$PQP_HOME/.pqp/pqp.toml`
+/// 2. XDG config → `~/.config/pqp/pqp.toml`
+/// 3. Legacy fallback → `~/.pqp/pqp.toml`
 fn config_path() -> Result<PathBuf> {
+    // PQP_HOME takes precedence over XDG
+    if let Ok(pqp_home) = std::env::var("PQP_HOME") {
+        let path = PathBuf::from(pqp_home).join(".pqp").join("pqp.toml");
+        return Ok(path);
+    }
     let xdg = dirs::config_dir()
         .context("cannot determine XDG config directory")?
         .join("pqp")
@@ -255,6 +262,42 @@ compress = "gzip""#,
             std::env::set_var("HOME", h);
         } else {
             std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_load_respects_pqp_home() {
+        let dir = tempfile::tempdir().unwrap();
+        let pqp_home = dir.path().join("custom_pqp");
+        std::fs::create_dir_all(pqp_home.join(".pqp")).unwrap();
+        std::fs::write(
+            pqp_home.join(".pqp").join("pqp.toml"),
+            r#"[gen-key]
+kem = "ML-KEM-512"
+"#,
+        )
+        .unwrap();
+        let original_home = std::env::var_os("HOME");
+        let original_pqp_home = std::env::var_os("PQP_HOME");
+        std::env::set_var("HOME", dir.path());
+        std::env::set_var("PQP_HOME", &pqp_home);
+        let cfg = load().unwrap();
+        assert!(!cfg.is_empty());
+        assert_eq!(
+            cfg.get("gen-key")
+                .and_then(|m| m.get("kem"))
+                .and_then(|v| v.as_str()),
+            Some("ML-KEM-512")
+        );
+        if let Some(h) = original_home {
+            std::env::set_var("HOME", h);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        if let Some(p) = original_pqp_home {
+            std::env::set_var("PQP_HOME", p);
+        } else {
+            std::env::remove_var("PQP_HOME");
         }
     }
 }
