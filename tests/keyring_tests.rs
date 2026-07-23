@@ -12,18 +12,37 @@ fn test_keyring_dir(name: &str) -> PathBuf {
 
 fn find_key_id() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    let keys_dir = PathBuf::from(&home).join(".pqp").join("keys");
-    if !keys_dir.exists() {
-        return None;
-    }
-    for entry in std::fs::read_dir(&keys_dir).ok()? {
-        let entry = entry.ok()?;
-        let conf = entry.path().join("pqp.conf");
-        if conf.exists() {
-            return entry.file_name().into_string().ok();
+    let candidates = vec![
+        PathBuf::from(&home)
+            .join(".local")
+            .join("share")
+            .join("pqp")
+            .join("keys"),
+        PathBuf::from(&home).join(".pqp").join("keys"),
+    ];
+    for keys_dir in &candidates {
+        if !keys_dir.exists() {
+            continue;
+        }
+        for entry in std::fs::read_dir(keys_dir).ok()? {
+            let entry = entry.ok()?;
+            let conf = entry.path().join("pqp.conf");
+            if conf.exists() {
+                return entry.file_name().into_string().ok();
+            }
         }
     }
     None
+}
+
+fn keys_dir() -> PathBuf {
+    let home = PathBuf::from(std::env::var("HOME").unwrap());
+    let xdg = home.join(".local").join("share").join("pqp").join("keys");
+    if xdg.exists() {
+        xdg
+    } else {
+        home.join(".pqp").join("keys")
+    }
 }
 
 #[test]
@@ -171,10 +190,7 @@ fn test_key_info_public_only_key() {
     )
     .unwrap();
 
-    std::fs::remove_file(
-        std::env::var("HOME").unwrap() + "/.pqp/keys/" + &meta.key_id + "/pqp-secret.der",
-    )
-    .unwrap();
+    std::fs::remove_file(keys_dir().join(&meta.key_id).join("pqp-secret.der")).unwrap();
 
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys[0].has_public);
@@ -234,10 +250,7 @@ fn test_remove_key_public_only() {
     assert!(keys.is_empty(), "key should be removed from listing");
 
     // Secret file remains but no public + conf, so list_keys won't find it
-    let dir = PathBuf::from(std::env::var("HOME").unwrap())
-        .join(".pqp")
-        .join("keys")
-        .join(&key_id);
+    let dir = keys_dir().join(&key_id);
     assert!(
         dir.join("pqp-secret.der").exists(),
         "secret key should remain"
@@ -262,10 +275,7 @@ fn test_remove_key_public_and_private() {
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys.is_empty(), "key should be removed completely");
 
-    let dir = PathBuf::from(std::env::var("HOME").unwrap())
-        .join(".pqp")
-        .join("keys")
-        .join(&key_id);
+    let dir = keys_dir().join(&key_id);
     assert!(!dir.exists(), "key directory should be removed");
 }
 

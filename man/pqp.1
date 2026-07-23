@@ -9,9 +9,11 @@ pqp \- quantum-resistant GPG emulation
 signing, and file format, but using post-quantum asymmetric algorithms
 (ML-KEM / Kyber and ML-DSA / Dilithium) instead of RSA/ECC.
 
-Keys are stored in \fI~/.pqp/keys/\fR.  Secret keys are encrypted on disk
-with Argon2id + XChaCha20-Poly1305.  All commands accept \(oq\-\(cq or omit
-the input positional argument to read from stdin.
+Keys are stored in \fI~/.local/share/pqp/keys/\fR (XDG data directory),
+falling back to \fI~/.pqp/keys/\fR for backward compatibility.  Secret
+keys are encrypted on disk with Argon2id + XChaCha20-Poly1305.  All
+commands accept \(oq\-\(cq or omit the input positional argument to read
+from stdin.
 
 .SH GLOBAL OPTIONS
 .TP
@@ -24,9 +26,9 @@ executed.
 Print help information.
 
 .SH CONFIGURATION FILE
-\fBpqp\fR reads \fI~/.pqp/pqp.toml\fR if present to set defaults for CLI
-options.  Precedence (lowest to highest): code defaults < config file < CLI
-flags.
+\fBpqp\fR reads \fI~/.config/pqp/pqp.toml\fR (XDG config directory) if
+present, falling back to \fI~/.pqp/pqp.toml\fR for backward compatibility.
+Precedence (lowest to highest): code defaults < config file < CLI flags.
 
 Example:
 .PP
@@ -312,23 +314,24 @@ The decoded payload contains, in order:
 
 .SH FILES
 .TP
-\fI~/.pqp/pqp.toml\fR
-Global configuration file.  Optional.  Provides per-command defaults.
+\fI~/.config/pqp/pqp.toml\fR
+Global configuration file (XDG config).  Optional.  Fallback:
+\fI~/.pqp/pqp.toml\fR.
 .TP
-\fI~/.pqp/keys/\fR
-Key storage directory.  Each key pair is stored in a subdirectory
-named by its 16-hex-char key ID.
+\fI~/.local/share/pqp/keys/\fR
+Key storage directory (XDG data).  Each key pair is stored in a subdirectory
+named by its 16-hex-char key ID.  Fallback: \fI~/.pqp/keys/\fR.
 .TP
-\fI~/.pqp/keys/\fIKEYID\fB/pqp.conf\fR
+\fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp.conf\fR
 Key metadata (TOML format): key ID, creation date, user ID,
-algorithm identifiers.
+algorithm identifiers.  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp.conf\fR.
 .TP
-\fI~/.pqp/keys/\fIKEYID\fB/pqp-public.der\fR
-Public key bytes (raw DER).
+\fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp-public.der\fR
+Public key bytes (raw DER).  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp-public.der\fR.
 .TP
-\fI~/.pqp/keys/\fIKEYID\fB/pqp-secret.der\fR
+\fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp-secret.der\fR
 Secret key bytes, passphrase-encrypted with Argon2id +
-XChaCha20-Poly1305.
+XChaCha20-Poly1305.  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp-secret.der\fR.
 .TP
 \fI.pqp.enc\fR
 Encrypted file output.

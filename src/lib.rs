@@ -22,9 +22,12 @@
 //!
 //! # Global configuration file
 //!
-//! `pqp` reads `~/.pqp/pqp.toml` if present. Each command section mirrors CLI
-//! options. Precedence (lowest to highest): code defaults < config file < CLI flags.
-//! See `pqp.toml.sample` in the source tree for detailed pros/cons of every value.
+//! `pqp` reads `~/.config/pqp/pqp.toml` (XDG config) if present, falling
+//! back to `~/.pqp/pqp.toml` for backward compatibility. Each command
+//! section mirrors CLI options. Precedence (lowest to highest): code
+//! defaults < config file < CLI flags.
+//! See `pqp.toml.sample` in the source tree for detailed pros/cons of
+//! every value.
 //!
 //! **Available options:**
 //!
@@ -38,7 +41,7 @@
 //! | `[export]` | `format` | `armor`, `pqp` | `armor` | armor universal, pqp self-describing |
 //! | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | only for PQP format |
 //!
-//! Example `~/.pqp/pqp.toml`:
+//! Example `~/.config/pqp/pqp.toml`:
 //! ```toml
 //! [gen-key]
 //! kem = "ML-KEM-768"
@@ -146,9 +149,11 @@
 //!
 //! # Key storage
 //!
-//! Keys are stored in `~/.pqp/keys/<key-id>/`. Secret keys are encrypted
-//! with Argon2id + XChaCha20-Poly1305. All commands accept `-` or omit
-//! the input positional argument to read from stdin.
+//! Keys are stored in `~/.local/share/pqp/keys/<key-id>/` (XDG data dir),
+//! falling back to `~/.pqp/keys/<key-id>/` for backward compatibility.
+//! Secret keys are encrypted with Argon2id + XChaCha20-Poly1305.
+//! All commands accept `-` or omit the input positional argument to read
+//! from stdin.
 //!
 //! Identifiers (key ID or user ID) are resolved by checking directory names
 //! first, then matching `user_id` in `pqp.conf` metadata.

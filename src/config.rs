@@ -28,10 +28,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use toml::Value;
 
-/// Path to the configuration file.
+/// Path to the configuration file — XDG config (`~/.config/pqp/pqp.toml`)
+/// with fallback to legacy `~/.pqp/pqp.toml` for backward compatibility.
 fn config_path() -> Result<PathBuf> {
+    let xdg = dirs::config_dir()
+        .context("cannot determine XDG config directory")?
+        .join("pqp")
+        .join("pqp.toml");
+    if xdg.exists() {
+        return Ok(xdg);
+    }
     let home = dirs::home_dir().context("cannot determine home directory")?;
-    Ok(home.join(".pqp").join("pqp.toml"))
+    let legacy = home.join(".pqp").join("pqp.toml");
+    if legacy.exists() {
+        return Ok(legacy);
+    }
+    Ok(xdg)
 }
 
 /// Load the config file, returning an empty map if it doesn't exist.

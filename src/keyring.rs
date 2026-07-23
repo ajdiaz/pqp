@@ -52,9 +52,21 @@ pub struct KeyInfo {
     pub encoding_algorithm: String,
 }
 
+/// XDG data directory for pqp (`~/.local/share/pqp/`), falling back to
+/// `~/.pqp/` if the legacy path exists for backward compatibility.
 fn pqp_dir() -> Result<PathBuf> {
+    let xdg = dirs::data_dir()
+        .context("cannot determine XDG data directory")?
+        .join("pqp");
+    if xdg.exists() {
+        return Ok(xdg);
+    }
     let home = dirs::home_dir().context("cannot determine home directory")?;
-    Ok(home.join(".pqp"))
+    let legacy = home.join(".pqp");
+    if legacy.exists() {
+        return Ok(legacy);
+    }
+    Ok(xdg)
 }
 
 fn keys_dir() -> Result<PathBuf> {

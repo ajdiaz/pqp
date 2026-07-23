@@ -122,7 +122,14 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 
 ### ⚙️ Global configuration file
 
-`pqp` reads `~/.pqp/pqp.toml` if it exists. Set default options per command with TOML sections; CLI flags always win over config file values.
+`pqp` follows the XDG Base Directory specification:
+
+| File | XDG Path | Legacy Path (fallback) |
+|---|---|---|
+| Config | `~/.config/pqp/pqp.toml` | `~/.pqp/pqp.toml` |
+| Keys | `~/.local/share/pqp/keys/` | `~/.pqp/keys/` |
+
+Set default options per command with TOML sections in the config file; CLI flags always win over config file values.
 
 **Available options:**
 
