@@ -62,6 +62,7 @@ fn test_generate_and_export() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -89,6 +90,7 @@ fn test_generate_and_load_keys() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -125,6 +127,7 @@ fn test_key_info_fields() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -151,6 +154,7 @@ fn test_resolve_key_id_by_key_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -168,6 +172,7 @@ fn test_resolve_key_id_by_user_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -193,6 +198,7 @@ fn test_key_info_public_only_key() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -213,6 +219,7 @@ fn test_import_with_confirmation() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -246,6 +253,7 @@ fn test_remove_key_public_only() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -275,6 +283,7 @@ fn test_remove_key_public_and_private() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -305,6 +314,7 @@ fn test_resolve_key_ids_by_key_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -322,6 +332,7 @@ fn test_resolve_key_ids_by_user_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -331,6 +342,7 @@ fn test_resolve_key_ids_by_user_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -356,6 +368,7 @@ fn test_cli_remove_key_public_only() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -385,6 +398,7 @@ fn test_cli_remove_key_public_and_private() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -414,6 +428,7 @@ fn test_cli_remove_key_by_user_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -423,6 +438,7 @@ fn test_cli_remove_key_by_user_id() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -465,6 +481,7 @@ fn test_list_keys_json_format() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -491,6 +508,7 @@ fn test_list_keys_no_headers_format() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -516,6 +534,7 @@ fn test_import_from_stdin() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -549,6 +568,7 @@ fn test_export_public_key_pqp_format() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -581,6 +601,7 @@ fn test_import_public_key_from_pqp() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -618,6 +639,7 @@ fn test_cli_export_pqp_format() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -656,6 +678,7 @@ fn test_cli_import_pqp_format() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -690,6 +713,7 @@ fn test_pqp_format_roundtrip() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -729,6 +753,7 @@ fn test_pqp_format_compressed_roundtrip() {
             DsaVariant::MlDsa65,
             Encoding::Base64,
             "none",
+            "5y",
         )
         .unwrap();
 
@@ -766,6 +791,7 @@ fn test_cli_export_pqp_with_compression() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 

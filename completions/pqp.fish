@@ -18,6 +18,7 @@ complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l kem -d "KEM algor
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l dsa -d "Digital signature algorithm variant" -r -xa "ML-DSA-44 ML-DSA-65 ML-DSA-87"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l encoding -d "Encoding for armored output" -r -xa "BASE64 ASCII85"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l compress -d "Default compression algorithm preference" -r -xa "none zstd gzip bzip2 lzma"
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l expiration-date -d "Key expiration date" -r
 
 # --- list-keys ---
 complete -c pqp -f -n "__fish_use_subcommand" -a list-keys -d "List keys in the keyring"
@@ -30,6 +31,7 @@ complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -s o -l output -d "O
 complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -s s -l sign -d "Sign the ciphertext with sender key"
 complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -s u -l signer -d "Signer key ID or user ID (requires --sign)" -r -a "(__pqp_complete_keys)"
 complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -l compress -d "Compression algorithm" -r -xa "none zstd gzip bzip2 lzma"
+complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -l allow-expired -d "Allow using an expired key"
 complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -l help -d "Print help"
 complete -c pqp -f -n "__fish_seen_subcommand_from encrypt" -a "(__fish_complete_path)" -d "Input file"
 
@@ -45,6 +47,7 @@ complete -c pqp -f -n "__fish_use_subcommand" -a sign -d "Sign a file with a pri
 complete -c pqp -f -n "__fish_seen_subcommand_from sign" -s u -l user -d "Signing key ID or user ID" -r -a "(__pqp_complete_keys)"
 complete -c pqp -f -n "__fish_seen_subcommand_from sign" -s o -l output -d "Output signature file path" -r
 complete -c pqp -f -n "__fish_seen_subcommand_from sign" -l no-passphrase -d "Use empty passphrase (no prompt)"
+complete -c pqp -f -n "__fish_seen_subcommand_from sign" -l allow-expired -d "Allow using an expired key"
 complete -c pqp -f -n "__fish_seen_subcommand_from sign" -l help -d "Print help"
 complete -c pqp -f -n "__fish_seen_subcommand_from sign" -a "(__fish_complete_path)" -d "Input file"
 

@@ -57,6 +57,12 @@ pub enum Commands {
             help = "Default compression algorithm: none, zstd, gzip, bzip2, lzma"
         )]
         compress: String,
+        #[arg(
+            long = "expiration-date",
+            default_value = "5y",
+            help = "Key expiration: <N>y, <N>m, <N>d, or YYYY-MM-DD"
+        )]
+        expiration_date: String,
     },
     /// List keys in the keyring.
     #[command(name = "list-keys")]
@@ -95,6 +101,11 @@ pub enum Commands {
             help = "Compression algorithm: none, zstd, gzip, bzip2, lzma"
         )]
         compress: String,
+        #[arg(
+            long = "allow-expired",
+            help = "Allow using an expired key"
+        )]
+        allow_expired: bool,
     },
     /// Decrypt a file.
     #[command(name = "decrypt")]
@@ -117,6 +128,11 @@ pub enum Commands {
         input: Option<String>,
         #[arg(long = "no-passphrase", help = "Use empty passphrase (no prompt)")]
         no_passphrase: bool,
+        #[arg(
+            long = "allow-expired",
+            help = "Allow using an expired key"
+        )]
+        allow_expired: bool,
     },
     /// Verify a signature.
     #[command(name = "verify")]

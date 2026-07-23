@@ -37,6 +37,9 @@
 //! | `[gen-key]` | `dsa` | `ML-DSA-44`, `ML-DSA-65`, `ML-DSA-87` | `ML-DSA-65` | 44 compact, 87 max security but 2× sig size |
 //! | `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller, less universal |
 //! | `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
+//! | `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
+//! | `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
+//! | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 //! | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | table human, no-headers scripts, json programs |
 //! | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd best speed/ratio, lzma best ratio/slowest |
 //! | `[export]` | `format` | `armor`, `pqp` | `armor` | armor universal, pqp self-describing |
@@ -59,7 +62,7 @@
 //! # Commands in detail
 //!
 //! ### `gen-key`
-//! `pqp gen-key -u <user> [--no-passphrase] [--kem <variant>] [--dsa <variant>] [--encoding <enc>] [--compress <algo>]`
+//! `pqp gen-key -u <user> [--no-passphrase] [--kem <variant>] [--dsa <variant>] [--encoding <enc>] [--compress <algo>] [--expiration-date <date>]`
 //!
 //! | Flag | Description |
 //! |---|---|
@@ -69,6 +72,7 @@
 //! | `--dsa` | DSA variant: `ML-DSA-44`, `ML-DSA-65` (default), `ML-DSA-87` |
 //! | `--encoding` | Armor encoding: `BASE64` (default), `ASCII85` |
 //! | `--compress` | Default compression preference: `none` (default), `zstd`, `gzip`, `bzip2`, `lzma` |
+//! | `--expiration-date` | Key expiration: `<N>y` (default: `5y`), `<N>m`, `<N>d`, or `YYYY-MM-DD` |
 //!
 //! ### `list-keys`
 //! `pqp list-keys [--format <format>]`
@@ -78,7 +82,7 @@
 //! | `--format` | Output format: `table` (default), `no-headers`, `json` |
 //!
 //! ### `encrypt`
-//! `pqp encrypt -r <recipient> -o <outfile> [--compress <algo>] [--sign] [--signer <user>] [infile]`
+//! `pqp encrypt -r <recipient> -o <outfile> [--compress <algo>] [--sign] [--signer <user>] [--allow-expired] [infile]`
 //!
 //! | Flag | Description |
 //! |---|---|
@@ -87,6 +91,7 @@
 //! | `--compress` | Compression: `none`, `zstd` (default), `gzip`, `bzip2`, `lzma` |
 //! | `-s`, `--sign` | Sign the ciphertext with sender key |
 //! | `-u`, `--signer` | Signer key ID or user ID (requires `--sign`) |
+//! | `--allow-expired` | Allow using an expired recipient or signer key |
 //! | `infile` | Input file path (omit or `-` for stdin) |
 //!
 //! ### `decrypt`
@@ -99,13 +104,14 @@
 //! | `infile` | Input file path (omit or `-` for stdin) |
 //!
 //! ### `sign`
-//! `pqp sign -u <user> -o <outfile> [--no-passphrase] [infile]`
+//! `pqp sign -u <user> -o <outfile> [--no-passphrase] [--allow-expired] [infile]`
 //!
 //! | Flag | Description |
 //! |---|---|
 //! | `-u`, `--user` | Signing key ID or user ID |
 //! | `-o`, `--output` | Output signature file path |
 //! | `--no-passphrase` | Use empty passphrase (no prompt) |
+//! | `--allow-expired` | Allow using an expired signing key |
 //! | `infile` | Input file path (omit or `-` for stdin) |
 //!
 //! ### `verify`
@@ -180,5 +186,6 @@ pub mod armor;
 pub mod cli;
 pub mod config;
 pub mod crypto;
+pub mod expiry;
 pub mod format;
 pub mod keyring;

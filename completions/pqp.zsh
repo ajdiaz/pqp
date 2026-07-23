@@ -71,7 +71,8 @@ _pqp_gen_key() {
         '--kem[KEM algorithm variant]:variant:(ML-KEM-512 ML-KEM-768 ML-KEM-1024)' \
         '--dsa[Digital signature algorithm variant]:variant:(ML-DSA-44 ML-DSA-65 ML-DSA-87)' \
         '--encoding[Encoding for armored output]:encoding:(BASE64 ASCII85)' \
-        '--compress[Default compression algorithm preference]:compress:(none zstd gzip bzip2 lzma)'
+        '--compress[Default compression algorithm preference]:compress:(none zstd gzip bzip2 lzma)' \
+        '--expiration-date[Key expiration date]:expiration:'
 }
 
 _pqp_list_keys() {
@@ -86,6 +87,7 @@ _pqp_encrypt() {
         '(-s --sign)'{-s,--sign}'[Sign the ciphertext with sender key]' \
         '(-u --signer)'{-u,--signer}'[Signer key ID or user ID]:signer:' \
         '--compress[Compression algorithm]:compress:(none zstd gzip bzip2 lzma)' \
+        '--allow-expired[Allow using an expired key]' \
         '*:input file:_files'
 }
 
@@ -101,6 +103,7 @@ _pqp_sign() {
         '(-u --user)'{-u,--user}'[Signing key ID or user ID]:user:' \
         '(-o --output)'{-o,--output}'[Output signature file path]:output file:_files' \
         '--no-passphrase[Use empty passphrase (no prompt)]' \
+        '--allow-expired[Allow using an expired key]' \
         '*:input file:_files'
 }
 

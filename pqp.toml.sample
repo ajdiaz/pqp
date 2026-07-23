@@ -100,6 +100,35 @@ encoding = "BASE64"
 #                    is critical.
 compress = "none"
 
+# Key expiration date.
+# Controls how long the generated key is valid. After this date,
+# commands that use the key (encrypt, sign) will refuse unless
+# --allow-expired is given.
+#
+# Possible values:
+#   "<N>y"         — N years from now [default: "5y"].
+#                    Convenient relative durations.
+#                    5 years is a reasonable default — long enough
+#                    to be practical, short enough to encourage
+#                    key rotation.
+#
+#   "<N>m"         — N months from now.
+#                    Useful for short-lived keys in CI/CD or
+#                    temporary access scenarios.
+#
+#   "<N>d"         — N days from now.
+#                    For very short-lived keys (hackathons, demos).
+#
+#   "YYYY-MM-DD"   — Absolute expiration date.
+#                    Precise control. The key expires at the end
+#                    of the given day (23:59:59 UTC).
+#
+# Examples:
+#   expiration-date = "1y"       # 1 year
+#   expiration-date = "90d"      # 90 days
+#   expiration-date = "2030-12-31"  # absolute
+expiration-date = "5y"
+
 # ── list-keys ──────────────────────────────────────────────────────────
 # Default output format for listing keys.
 # CLI flag --format overrides this.

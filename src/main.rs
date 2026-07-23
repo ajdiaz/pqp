@@ -105,6 +105,7 @@ fn main() -> Result<()> {
             mut dsa,
             mut encoding,
             mut compress,
+            mut expiration_date,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would gen-key: no action taken");
@@ -115,6 +116,8 @@ fn main() -> Result<()> {
             dsa = config::apply_str(&dsa, cmd_cfg, "dsa", "ML-DSA-65");
             encoding = config::apply_str(&encoding, cmd_cfg, "encoding", "BASE64");
             compress = config::apply_str(&compress, cmd_cfg, "compress", "none");
+            expiration_date =
+                config::apply_str(&expiration_date, cmd_cfg, "expiration-date", "5y");
             let kem_variant =
                 KemVariant::parse(&kem).with_context(|| format!("unknown KEM variant: {}", kem))?;
             let dsa_variant =
@@ -139,6 +142,7 @@ fn main() -> Result<()> {
                 dsa_variant,
                 encoding,
                 &compress,
+                &expiration_date,
             )?;
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);
@@ -147,6 +151,7 @@ fn main() -> Result<()> {
             println!("  dsa: {}", meta.sign_algorithm);
             println!("  encoding: {}", meta.encoding_algorithm);
             println!("  compress: {}", meta.compress_algorithm);
+            println!("  expires: {}", meta.expiration_date);
         }
         Commands::ListKeys { mut format } => {
             if cli.dry_run {
@@ -170,6 +175,7 @@ fn main() -> Result<()> {
                             } else {
                                 "pub"
                             };
+                            let expired = pqp::expiry::is_expired(&key.expiration_date);
                             items.push(format!(
                                 r#"  {{
     "key_id": "{}",
@@ -180,7 +186,9 @@ fn main() -> Result<()> {
     "type": "{}",
     "kem_algorithm": "{}",
     "sign_algorithm": "{}",
-    "compress_algorithm": "{}"
+    "compress_algorithm": "{}",
+    "expiration_date": "{}",
+    "expired": {}
   }}"#,
                                 key.key_id,
                                 key.user_id,
@@ -191,6 +199,8 @@ fn main() -> Result<()> {
                                 key.kem_algorithm,
                                 key.sign_algorithm,
                                 key.compress_algorithm,
+                                key.expiration_date,
+                                expired,
                             ));
                         }
                         println!("[\n{}\n]", items.join(",\n"));
@@ -204,8 +214,10 @@ fn main() -> Result<()> {
                             } else {
                                 "pub"
                             };
+                            let expired = pqp::expiry::is_expired(&key.expiration_date);
+                            let status = if expired { "expired" } else { "valid" };
                             println!(
-                                "{} {} {} {} {} {} {}",
+                                "{} {} {} {} {} {} {} {} {}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
@@ -213,6 +225,8 @@ fn main() -> Result<()> {
                                 key.kem_algorithm,
                                 key.sign_algorithm,
                                 key.compress_algorithm,
+                                key.expiration_date,
+                                status,
                             );
                         }
                     }
@@ -224,9 +238,9 @@ fn main() -> Result<()> {
                             .max()
                             .unwrap_or(20)
                             .max(8);
-                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14 + 1 + 10;
+                        let total = 16 + 1 + uid_width + 1 + 26 + 1 + 8 + 1 + 14 + 1 + 14 + 1 + 10 + 1 + 10 + 1 + 10;
                         println!(
-                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10}",
+                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
                             "Key ID",
                             "User ID",
                             "Created",
@@ -234,6 +248,8 @@ fn main() -> Result<()> {
                             "KEM",
                             "Sign",
                             "Compress",
+                            "Expires",
+                            "Status",
                             uid_w = uid_width,
                         );
                         println!("{}", "-".repeat(total));
@@ -245,8 +261,11 @@ fn main() -> Result<()> {
                             } else {
                                 "pub"
                             };
+                            let expired = pqp::expiry::is_expired(&key.expiration_date);
+                            let status = if expired { "expired" } else { "valid" };
+                            let expires_display = &key.expiration_date[..10];
                             println!(
-                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10}",
+                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
@@ -254,6 +273,8 @@ fn main() -> Result<()> {
                                 key.kem_algorithm,
                                 key.sign_algorithm,
                                 key.compress_algorithm,
+                                expires_display,
+                                status,
                                 uid_w = uid_width,
                             );
                         }
@@ -268,6 +289,7 @@ fn main() -> Result<()> {
             sign,
             signer,
             mut compress,
+            allow_expired,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would encrypt: no action taken");
@@ -275,13 +297,36 @@ fn main() -> Result<()> {
             }
             let cmd_cfg = config::section(&cfg, "encrypt");
             compress = config::apply_str(&compress, cmd_cfg, "compress", "zstd");
+            let allow_expired =
+                config::apply_bool(allow_expired, cmd_cfg, "allow-expired", false);
             let recipient_id =
                 keyring::resolve_key_id(&recipient).context("resolving recipient key")?;
+
+            if keyring::check_key_expired(&recipient_id)? {
+                let msg = format!("Warning: key {} is expired", recipient_id);
+                if allow_expired {
+                    eprintln!("{}; proceeding with --allow-expired", msg);
+                } else {
+                    anyhow::bail!("{}. Use --allow-expired to force", msg);
+                }
+            }
 
             let signer_id = match &signer {
                 Some(s) => Some(keyring::resolve_key_id(s).context("resolving signer key")?),
                 None => None,
             };
+
+            if sign {
+                let sid = signer_id.as_deref().unwrap_or(&recipient_id);
+                if keyring::check_key_expired(sid)? {
+                    let msg = format!("Warning: signing key {} is expired", sid);
+                    if allow_expired {
+                        eprintln!("{}; proceeding with --allow-expired", msg);
+                    } else {
+                        anyhow::bail!("{}. Use --allow-expired to force", msg);
+                    }
+                }
+            }
 
             let passphrase = if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
@@ -445,12 +490,21 @@ fn main() -> Result<()> {
             output,
             input,
             no_passphrase,
+            allow_expired,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would sign: no action taken");
                 return Ok(());
             }
             let user_id = keyring::resolve_key_id(&user).context("resolving signing key")?;
+            if keyring::check_key_expired(&user_id)? {
+                let msg = format!("Warning: signing key {} is expired", user_id);
+                if allow_expired {
+                    eprintln!("{}; proceeding with --allow-expired", msg);
+                } else {
+                    anyhow::bail!("{}. Use --allow-expired to force", msg);
+                }
+            }
             let passphrase = if no_passphrase {
                 String::new()
             } else {

@@ -51,8 +51,12 @@ _pqp() {
                     COMPREPLY=($(compgen -W 'none zstd gzip bzip2 lzma' -- "$cur"))
                     return
                     ;;
+                --expiration-date)
+                    # free-form: N y/m/d or YYYY-MM-DD
+                    return
+                    ;;
                 *)
-                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --compress --no-passphrase --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --compress --expiration-date --no-passphrase --help -h' -- "$cur"))
                     return
                     ;;
             esac
@@ -88,7 +92,7 @@ _pqp() {
                     return
                     ;;
                 *)
-                    COMPREPLY=($(compgen -W '--recipient -r --output -o --sign -s --signer -u --compress --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--recipient -r --output -o --sign -s --signer -u --compress --allow-expired --help -h' -- "$cur"))
                     return
                     ;;
             esac
@@ -115,7 +119,7 @@ _pqp() {
                     return
                     ;;
                 *)
-                    COMPREPLY=($(compgen -W '--user -u --output -o --no-passphrase --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--user -u --output -o --no-passphrase --allow-expired --help -h' -- "$cur"))
                     return
                     ;;
             esac

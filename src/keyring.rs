@@ -16,6 +16,7 @@ use crate::armor;
 use crate::armor::Encoding;
 use crate::crypto::{keygen, sym};
 use crate::crypto::{DsaVariant, KemVariant};
+use crate::expiry;
 use crate::format;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,8 @@ pub struct KeyMetadata {
     pub encoding_algorithm: String,
     #[serde(default = "default_compress")]
     pub compress_algorithm: String,
+    #[serde(default = "default_expiration")]
+    pub expiration_date: String,
 }
 
 fn default_encoding() -> String {
@@ -42,6 +45,10 @@ fn default_encoding() -> String {
 
 fn default_compress() -> String {
     "none".into()
+}
+
+fn default_expiration() -> String {
+    "expired".into()
 }
 
 /// Enriched key information including key type and algorithm details.
@@ -58,6 +65,8 @@ pub struct KeyInfo {
     pub encoding_algorithm: String,
     #[serde(default = "default_compress")]
     pub compress_algorithm: String,
+    #[serde(default = "default_expiration")]
+    pub expiration_date: String,
 }
 
 /// XDG data directory for pqp (`~/.local/share/pqp/`), with
@@ -219,6 +228,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 sign_algorithm: meta.sign_algorithm,
                 encoding_algorithm: meta.encoding_algorithm,
                 compress_algorithm: meta.compress_algorithm,
+                expiration_date: meta.expiration_date,
             });
         }
     }
@@ -237,6 +247,7 @@ pub fn generate_key(
     dsa_variant: DsaVariant,
     encoding: Encoding,
     compress: &str,
+    expiration_date: &str,
 ) -> Result<KeyMetadata> {
     let keypair = keygen::generate(kem_variant, dsa_variant)?;
 
@@ -251,6 +262,8 @@ pub fn generate_key(
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: encoding.as_str().into(),
         compress_algorithm: compress.to_string(),
+        expiration_date: expiry::parse_expiration(expiration_date)
+            .context("parsing expiration date")?,
     };
 
     let dir = keys_dir()?.join(&key_id);
@@ -459,6 +472,7 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         sign_algorithm: dsa_variant.as_str().into(),
         encoding_algorithm: "BASE64".into(),
         compress_algorithm: "none".into(),
+        expiration_date: default_expiration(),
     };
     let conf_toml = toml::to_string_pretty(&meta)?;
     std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
@@ -491,6 +505,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             sign_algorithm: "ML-DSA-65".into(),
             encoding_algorithm: "BASE64".into(),
             compress_algorithm: "none".into(),
+            expiration_date: default_expiration(),
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;
@@ -581,6 +596,15 @@ pub fn remove_key(key_id: &str, remove_private: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Check whether a key is expired based on its stored metadata.
+///
+/// Returns `None` if the metadata cannot be read or has no valid
+/// expiration date; otherwise returns `Some(true)` if expired.
+pub fn check_key_expired(key_id: &str) -> Result<bool> {
+    let meta = read_metadata(key_id)?;
+    Ok(expiry::is_expired(&meta.expiration_date))
 }
 
 fn generate_key_id() -> Result<String> {

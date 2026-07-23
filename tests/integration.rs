@@ -19,6 +19,7 @@ fn test_gen_key_and_list_keys() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -242,6 +243,7 @@ fn test_cli_sign_verify_stdin() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
 
@@ -299,6 +301,7 @@ fn test_gen_key_no_passphrase() {
         DsaVariant::MlDsa65,
         Encoding::Base64,
         "none",
+        "5y",
     )
     .unwrap();
     assert_eq!(meta.user_id, "nopass@example.com");

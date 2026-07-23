@@ -116,6 +116,23 @@ Standard base64.  Widest compatibility.
 ~25% more compact than base64.  Less universal.
 .RE
 .TP
+\fB\-\-expiration\-date\fR \fI\,DATE\/\fR
+Key expiration date.  Default: \fB5y\fR (5 years from now).
+.RS
+.TP
+\fB<N>y\fR
+N years from now, e.g. \fB1y\fR, \fB10y\fR.
+.TP
+\fB<N>m\fR
+N months from now, e.g. \fB6m\fR, \fB12m\fR.
+.TP
+\fB<N>d\fR
+N days from now, e.g. \fB30d\fR, \fB90d\fR.
+.TP
+\fBYYYY\-MM\-DD\fR
+Absolute date, e.g. \fB2030-12-31\fR.  Expires at end of day UTC.
+.RE
+.TP
 \fB\-\-compress\fR \fI\,ALGO\/\fR
 Default compression algorithm preference stored in key metadata.
 Default: \fBnone\fR.
@@ -151,7 +168,8 @@ Formatted columns with headers.  Most readable for humans.
 .TP
 \fBno\-headers\fR
 Space-separated values, one per line.  Ideal for scripting with
-cut/awk/grep.  Fields: key-id user-id date type kem-algo sign-algo compress.
+cut/awk/grep.  Fields: key-id user-id date type kem-algo sign-algo
+compress expiration-date status.
 .TP
 \fBjson\fR
 JSON array.  Self-describing field names.  Best for programmatic use.
@@ -179,6 +197,11 @@ Signer key ID or user ID (requires \fB\-\-sign\fR).
 \fB\-\-compress\fR \fI\,ALGO\/\fR
 Compression applied to plaintext before encryption.  Default: \fBzstd\fR.
 The algorithm is stored in the file so decrypt auto-detects it.
+.TP
+\fB\-\-allow\-expired\fR
+Allow using an expired recipient (or signer) key.  By default, encrypt
+refuses if the recipient key has expired.  With this flag the command
+proceeds after printing a warning.
 .RS
 .TP
 \fBnone\fR
@@ -229,6 +252,11 @@ Output signature file path.
 .TP
 \fB\-\-no\-passphrase\fR
 Skip the passphrase prompt (uses empty passphrase).
+.TP
+\fB\-\-allow\-expired\fR
+Allow using an expired signing key.  By default, sign refuses if the
+key has expired.  With this flag the command proceeds after printing
+a warning.
 
 .SS verify
 Verify a detached signature.
