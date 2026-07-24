@@ -48,6 +48,7 @@ Custom variants, no-passphrase, and expiration:
 pqp gen-key -u "bot@example.com" --no-passphrase --kem ML-KEM-1024 --dsa ML-DSA-87
 pqp gen-key -u "short-term@example.com" --expiration-date 30d
 pqp gen-key -u "long-term@example.com" --expiration-date 2035-12-31
+pqp gen-key -u "labeled@example.com" --metadata department=engineering --metadata role=service-bot
 ```
 
 ### Encrypt a file
@@ -155,6 +156,7 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller but less universal |
 | `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
 | `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
+| `[gen-key]` | `metadata` | arbitrary `key=value` pairs | (none) | stored in pqp.conf and armor headers; not interpreted |
 | `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | `table` human-friendly, `no-headers` for scripts, `json` for programs |
@@ -185,7 +187,7 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 
 ### ⚙️ Per-command options
 
-**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>`
+**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>` · `--metadata <key=value>`
 
 **list-keys:** `--format <table|no-headers|json>`
 

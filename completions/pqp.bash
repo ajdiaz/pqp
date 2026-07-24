@@ -56,7 +56,7 @@ _pqp() {
                     return
                     ;;
                 *)
-                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --compress --expiration-date --no-passphrase --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--user -u --kem --dsa --encoding --compress --expiration-date --metadata --no-passphrase --help -h' -- "$cur"))
                     return
                     ;;
             esac

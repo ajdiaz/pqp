@@ -63,6 +63,7 @@ fn test_generate_and_export() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -91,6 +92,7 @@ fn test_generate_and_load_keys() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -128,6 +130,7 @@ fn test_key_info_fields() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -155,6 +158,7 @@ fn test_key_expiration_relative() {
         Encoding::Base64,
         "none",
         "30d",
+        Vec::new(),
     )
     .unwrap();
     assert!(!meta.expiration_date.is_empty());
@@ -178,6 +182,7 @@ fn test_key_expiration_absolute() {
         Encoding::Base64,
         "none",
         "2030-06-15",
+        Vec::new(),
     )
     .unwrap();
     assert!(meta.expiration_date.starts_with("2030-06-15"));
@@ -197,6 +202,7 @@ fn test_key_expired_check() {
         Encoding::Base64,
         "none",
         "2000-01-01",
+        Vec::new(),
     )
     .unwrap();
     assert!(pqp::expiry::is_expired(&meta.expiration_date));
@@ -214,6 +220,7 @@ fn test_resolve_key_id_by_key_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -232,6 +239,7 @@ fn test_resolve_key_id_by_user_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -258,6 +266,7 @@ fn test_key_info_public_only_key() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -279,6 +288,7 @@ fn test_import_with_confirmation() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -313,6 +323,7 @@ fn test_remove_key_public_only() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -343,6 +354,7 @@ fn test_remove_key_public_and_private() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -374,6 +386,7 @@ fn test_resolve_key_ids_by_key_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -392,6 +405,7 @@ fn test_resolve_key_ids_by_user_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -402,6 +416,7 @@ fn test_resolve_key_ids_by_user_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -428,6 +443,7 @@ fn test_cli_remove_key_public_only() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -458,6 +474,7 @@ fn test_cli_remove_key_public_and_private() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -488,6 +505,7 @@ fn test_cli_remove_key_by_user_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -498,6 +516,7 @@ fn test_cli_remove_key_by_user_id() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -541,6 +560,7 @@ fn test_list_keys_json_format() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -568,6 +588,7 @@ fn test_list_keys_no_headers_format() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -594,6 +615,7 @@ fn test_import_from_stdin() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -628,6 +650,7 @@ fn test_export_public_key_pqp_format() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -661,6 +684,7 @@ fn test_import_public_key_from_pqp() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -699,6 +723,7 @@ fn test_cli_export_pqp_format() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -738,6 +763,7 @@ fn test_cli_import_pqp_format() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -773,6 +799,7 @@ fn test_pqp_format_roundtrip() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -813,6 +840,7 @@ fn test_pqp_format_compressed_roundtrip() {
             Encoding::Base64,
             "none",
             "5y",
+            Vec::new(),
         )
         .unwrap();
 
@@ -851,6 +879,7 @@ fn test_cli_export_pqp_with_compression() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 

@@ -41,8 +41,17 @@ impl std::str::FromStr for Encoding {
     }
 }
 
-/// Encode binary data as an ASCII-armored string with the given marker and encoding.
-pub fn armor(data: &[u8], marker: &str, encoding: &Encoding) -> Result<String> {
+/// Encode binary data as an ASCII-armored string with the given marker, encoding,
+/// and optional metadata headers.
+///
+/// Metadata headers are inserted between the BEGIN line and the encoded body as
+/// `Key: Value` lines.
+pub fn armor(
+    data: &[u8],
+    marker: &str,
+    encoding: &Encoding,
+    metadata: &[(String, String)],
+) -> Result<String> {
     let encoded = match encoding {
         Encoding::Base64 => {
             base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data)
@@ -53,6 +62,12 @@ pub fn armor(data: &[u8], marker: &str, encoding: &Encoding) -> Result<String> {
     let mut result = String::new();
     result.push_str(&format!("-----BEGIN {}-----\n", marker));
 
+    for (k, v) in metadata {
+        for line in v.lines() {
+            result.push_str(&format!("{}: {}\n", k, line));
+        }
+    }
+
     for chunk in encoded.as_bytes().chunks(LINE_WIDTH) {
         result.push_str(&String::from_utf8_lossy(chunk));
         result.push('\n');
@@ -62,11 +77,13 @@ pub fn armor(data: &[u8], marker: &str, encoding: &Encoding) -> Result<String> {
     Ok(result)
 }
 
-/// Decode an ASCII-armored string back into binary data, returning the marker and payload.
+/// Decode an ASCII-armored string back into binary data, returning the marker,
+/// payload, and any metadata header lines.
 ///
-/// Tries base64 decoding first, then ascii85, and returns whichever
-/// succeeds. If both fail, returns the base64 error.
-pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>)> {
+/// Header lines are `Key: Value` pairs between the BEGIN line and the encoded body.
+/// Lines that don't start with `-----` or contain `: ` are treated as body data.
+#[allow(clippy::type_complexity)]
+pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>, Vec<(String, String)>)> {
     let trimmed = armored.trim();
 
     let begin_marker = "-----BEGIN ";
@@ -87,18 +104,28 @@ pub fn unarmor(armored: &str) -> Result<(String, Vec<u8>)> {
     let body_end = end_pos;
 
     let body = &trimmed[body_start..body_end];
-    let clean: String = body
-        .lines()
-        .filter(|l| !l.starts_with("-----"))
-        .collect::<Vec<_>>()
-        .concat()
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
+
+    let mut metadata = Vec::new();
+    let mut clean = String::new();
+    for line in body.lines() {
+        if line.starts_with("-----") {
+            continue;
+        }
+        if let Some(pos) = line.find(": ") {
+            let key = &line[..pos];
+            let value = &line[pos + 2..];
+            if !key.contains(' ') && !key.is_empty() {
+                metadata.push((key.to_string(), value.to_string()));
+                continue;
+            }
+        }
+        clean.push_str(line);
+    }
+    let clean: String = clean.chars().filter(|c| !c.is_whitespace()).collect();
 
     let decoded = base64_decode(&clean).or_else(|_| ascii85_decode(&clean))?;
 
-    Ok((marker, decoded))
+    Ok((marker, decoded, metadata))
 }
 
 fn ascii85_encode(data: &[u8]) -> String {

@@ -129,6 +129,18 @@ compress = "none"
 #   expiration-date = "2030-12-31"  # absolute
 expiration-date = "5y"
 
+# Additional key-value metadata. Repeatable for multiple entries.
+# These are stored in pqp.conf and included as header lines in
+# ASCII-armored key exports. Restored on import. Not interpreted
+# by pqp — purely for user-defined annotations.
+#
+# Accepts any arbitrary key=value pair. Example:
+#   metadata = [
+#     { key = "department", value = "engineering" },
+#     { key = "role", value = "service-bot" },
+#   ]
+metadata = []
+
 # ── list-keys ──────────────────────────────────────────────────────────
 # Default output format for listing keys.
 # CLI flag --format overrides this.

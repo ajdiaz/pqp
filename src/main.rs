@@ -106,6 +106,7 @@ fn main() -> Result<()> {
             mut encoding,
             mut compress,
             mut expiration_date,
+            metadata,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would gen-key: no action taken");
@@ -134,6 +135,22 @@ fn main() -> Result<()> {
                 }
                 passphrase
             };
+            let metadata_entries: Vec<keyring::MetadataEntry> = metadata
+                .iter()
+                .filter_map(|s| {
+                    let mut parts = s.splitn(2, '=');
+                    let k = parts.next()?;
+                    let v = parts.next().unwrap_or("");
+                    if k.is_empty() {
+                        None
+                    } else {
+                        Some(keyring::MetadataEntry {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        })
+                    }
+                })
+                .collect();
             let meta = keyring::generate_key(
                 &user,
                 &passphrase,
@@ -142,7 +159,19 @@ fn main() -> Result<()> {
                 encoding,
                 &compress,
                 &expiration_date,
+                metadata_entries,
             )?;
+            println!("Generated key pair: key-id={}", meta.key_id);
+            println!("  user-id: {}", meta.user_id);
+            println!("  created: {}", meta.created_at);
+            println!("  kem: {}", meta.kem_algorithm);
+            println!("  dsa: {}", meta.sign_algorithm);
+            println!("  encoding: {}", meta.encoding_algorithm);
+            println!("  compress: {}", meta.compress_algorithm);
+            println!("  expires: {}", meta.expiration_date);
+            for entry in &meta.metadata {
+                println!("  {}: {}", entry.key, entry.value);
+            }
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);
             println!("  created: {}", meta.created_at);
@@ -175,6 +204,21 @@ fn main() -> Result<()> {
                                 "pub"
                             };
                             let expired = pqp::expiry::is_expired(&key.expiration_date);
+                            let meta_json: String = if key.metadata.is_empty() {
+                                String::new()
+                            } else {
+                                let entries: Vec<String> = key
+                                    .metadata
+                                    .iter()
+                                    .map(|e| {
+                                        format!(
+                                            r#"    {{ "key": "{}", "value": "{}" }}"#,
+                                            e.key, e.value
+                                        )
+                                    })
+                                    .collect();
+                                format!(",\n    \"metadata\": [\n{}\n    ]", entries.join(",\n"))
+                            };
                             items.push(format!(
                                 r#"  {{
     "key_id": "{}",
@@ -188,7 +232,7 @@ fn main() -> Result<()> {
     "compress_algorithm": "{}",
     "expiration_date": "{}",
     "expired": {}
-  }}"#,
+  {} }}"#,
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
@@ -200,6 +244,7 @@ fn main() -> Result<()> {
                                 key.compress_algorithm,
                                 key.expiration_date,
                                 expired,
+                                meta_json,
                             ));
                         }
                         println!("[\n{}\n]", items.join(",\n"));
@@ -723,7 +768,7 @@ fn main() -> Result<()> {
             };
 
             // Auto-detect format: try armor first, then PQP
-            if let Ok((marker, _)) = pqp::armor::unarmor(&data) {
+            if let Ok((marker, _, _)) = pqp::armor::unarmor(&data) {
                 let import_key_id = marker
                     .strip_prefix("PQP PUBLIC KEY ")
                     .unwrap_or(&marker)

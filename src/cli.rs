@@ -63,6 +63,8 @@ pub enum Commands {
             help = "Key expiration: <N>y, <N>m, <N>d, or YYYY-MM-DD"
         )]
         expiration_date: String,
+        #[arg(long = "metadata", help = "Key metadata as key=value (repeatable)")]
+        metadata: Vec<String>,
     },
     /// List keys in the keyring.
     #[command(name = "list-keys")]

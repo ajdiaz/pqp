@@ -19,6 +19,7 @@ complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l dsa -d "Digital s
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l encoding -d "Encoding for armored output" -r -xa "BASE64 ASCII85"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l compress -d "Default compression algorithm preference" -r -xa "none zstd gzip bzip2 lzma"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l expiration-date -d "Key expiration date" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l metadata -d "Key metadata as key=value (repeatable)" -r
 
 # --- list-keys ---
 complete -c pqp -f -n "__fish_use_subcommand" -a list-keys -d "List keys in the keyring"

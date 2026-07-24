@@ -20,6 +20,7 @@ fn test_gen_key_and_list_keys() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -148,13 +149,14 @@ fn test_format_serialize_deserialize() {
 fn test_armor_roundtrip() {
     let data = b"armor test data";
     let marker = "TEST KEY";
-    let armored = pqp::armor::armor(data, marker, &Encoding::Base64).unwrap();
+    let armored = pqp::armor::armor(data, marker, &Encoding::Base64, &[]).unwrap();
     assert!(armored.contains(&format!("-----BEGIN {}-----", marker)));
     assert!(armored.contains(&format!("-----END {}-----", marker)));
 
-    let (parsed_marker, decoded) = pqp::armor::unarmor(&armored).unwrap();
+    let (parsed_marker, decoded, meta) = pqp::armor::unarmor(&armored).unwrap();
     assert_eq!(marker, parsed_marker);
     assert_eq!(data.to_vec(), decoded);
+    assert!(meta.is_empty());
 }
 
 #[test]
@@ -244,6 +246,7 @@ fn test_cli_sign_verify_stdin() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
 
@@ -302,6 +305,7 @@ fn test_gen_key_no_passphrase() {
         Encoding::Base64,
         "none",
         "5y",
+        Vec::new(),
     )
     .unwrap();
     assert_eq!(meta.user_id, "nopass@example.com");

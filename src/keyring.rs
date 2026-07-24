@@ -23,6 +23,13 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use zeroize::Zeroize;
 
+/// A key-value metadata pair associated with a key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetadataEntry {
+    pub key: String,
+    pub value: String,
+}
+
 /// Metadata for a key pair stored in the keyring.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeyMetadata {
@@ -37,6 +44,8 @@ pub struct KeyMetadata {
     pub compress_algorithm: String,
     #[serde(default = "default_expiration")]
     pub expiration_date: String,
+    #[serde(default)]
+    pub metadata: Vec<MetadataEntry>,
 }
 
 fn default_encoding() -> String {
@@ -67,6 +76,8 @@ pub struct KeyInfo {
     pub compress_algorithm: String,
     #[serde(default = "default_expiration")]
     pub expiration_date: String,
+    #[serde(default)]
+    pub metadata: Vec<MetadataEntry>,
 }
 
 /// XDG data directory for pqp (`~/.local/share/pqp/`), with
@@ -229,6 +240,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 encoding_algorithm: meta.encoding_algorithm,
                 compress_algorithm: meta.compress_algorithm,
                 expiration_date: meta.expiration_date,
+                metadata: meta.metadata,
             });
         }
     }
@@ -240,6 +252,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
 ///
 /// Accepts algorithm variants and an optional encoding. Defaults to
 /// ML-KEM-768, ML-DSA-65, and BASE64 if variants are not specified.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_key(
     user_id: &str,
     passphrase: &str,
@@ -248,6 +261,7 @@ pub fn generate_key(
     encoding: Encoding,
     compress: &str,
     expiration_date: &str,
+    metadata: Vec<MetadataEntry>,
 ) -> Result<KeyMetadata> {
     let keypair = keygen::generate(kem_variant, dsa_variant)?;
 
@@ -264,6 +278,7 @@ pub fn generate_key(
         compress_algorithm: compress.to_string(),
         expiration_date: expiry::parse_expiration(expiration_date)
             .context("parsing expiration date")?,
+        metadata,
     };
 
     let dir = keys_dir()?.join(&key_id);
@@ -379,7 +394,12 @@ pub fn export_public_key(key_id: &str) -> Result<String> {
         .context(format!("reading public key for {}", key_id))?;
 
     let marker = format!("PQP PUBLIC KEY {}", key_id);
-    armor::armor(&public_bytes, &marker, &encoding)
+    let meta_pairs: Vec<(String, String)> = meta
+        .metadata
+        .iter()
+        .map(|e| (e.key.clone(), e.value.clone()))
+        .collect();
+    armor::armor(&public_bytes, &marker, &encoding, &meta_pairs)
 }
 
 /// Export a public key in PQP format (`AlgorithmList::EncodedPayload`).
@@ -473,6 +493,7 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         encoding_algorithm: "BASE64".into(),
         compress_algorithm: "none".into(),
         expiration_date: default_expiration(),
+        metadata: Vec::new(),
     };
     let conf_toml = toml::to_string_pretty(&meta)?;
     std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
@@ -484,7 +505,7 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
 ///
 /// Returns the imported key ID.
 pub fn import_public_key(armored: &str) -> Result<String> {
-    let (marker, decoded) = armor::unarmor(armored)?;
+    let (marker, decoded, armored_metadata) = armor::unarmor(armored)?;
 
     let key_id = marker
         .strip_prefix("PQP PUBLIC KEY ")
@@ -497,6 +518,10 @@ pub fn import_public_key(armored: &str) -> Result<String> {
 
     let metadata_path = dir.join("pqp.conf");
     if !metadata_path.exists() {
+        let imported_metadata: Vec<MetadataEntry> = armored_metadata
+            .into_iter()
+            .map(|(k, v)| MetadataEntry { key: k, value: v })
+            .collect();
         let meta = KeyMetadata {
             key_id: key_id.clone(),
             created_at: timestamp_iso8601(),
@@ -506,6 +531,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             encoding_algorithm: "BASE64".into(),
             compress_algorithm: "none".into(),
             expiration_date: default_expiration(),
+            metadata: imported_metadata,
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;

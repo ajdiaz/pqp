@@ -38,6 +38,7 @@
 //! | `[gen-key]` | `encoding` | `BASE64`, `ASCII85` | `BASE64` | ASCII85 ~25% smaller, less universal |
 //! | `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
 //! | `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
+//! | `[gen-key]` | `metadata` | arbitrary `key=value` pairs | (none) | stored in pqp.conf and armor headers; not interpreted |
 //! | `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 //! | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 //! | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | table human, no-headers scripts, json programs |
@@ -62,7 +63,7 @@
 //! # Commands in detail
 //!
 //! ### `gen-key`
-//! `pqp gen-key -u <user> [--no-passphrase] [--kem <variant>] [--dsa <variant>] [--encoding <enc>] [--compress <algo>] [--expiration-date <date>]`
+//! `pqp gen-key -u <user> [--no-passphrase] [--kem <variant>] [--dsa <variant>] [--encoding <enc>] [--compress <algo>] [--expiration-date <date>] [--metadata <key=value>]...`
 //!
 //! | Flag | Description |
 //! |---|---|
@@ -73,6 +74,7 @@
 //! | `--encoding` | Armor encoding: `BASE64` (default), `ASCII85` |
 //! | `--compress` | Default compression preference: `none` (default), `zstd`, `gzip`, `bzip2`, `lzma` |
 //! | `--expiration-date` | Key expiration: `<N>y` (default: `5y`), `<N>m`, `<N>d`, or `YYYY-MM-DD` |
+//! | `--metadata` | Key metadata as `key=value` pairs (repeatable) |
 //!
 //! ### `list-keys`
 //! `pqp list-keys [--format <format>]`

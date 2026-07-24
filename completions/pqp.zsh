@@ -72,7 +72,8 @@ _pqp_gen_key() {
         '--dsa[Digital signature algorithm variant]:variant:(ML-DSA-44 ML-DSA-65 ML-DSA-87)' \
         '--encoding[Encoding for armored output]:encoding:(BASE64 ASCII85)' \
         '--compress[Default compression algorithm preference]:compress:(none zstd gzip bzip2 lzma)' \
-        '--expiration-date[Key expiration date]:expiration:'
+        '--expiration-date[Key expiration date]:expiration:' \
+        '--metadata[Key metadata as key=value (repeatable)]:metadata:'
 }
 
 _pqp_list_keys() {

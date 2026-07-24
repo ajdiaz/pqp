@@ -153,6 +153,11 @@ BZIP2.  Better ratio than gzip on text.  Slower.
 \fBlzma\fR
 LZMA.  Best ratio, slowest.
 .RE
+.TP
+\fB\-\-metadata\fR \fI\,KEY=VALUE\/\fR
+Key metadata as key=value pairs.  Repeatable for multiple entries.
+Stored in pqp.conf and included in ASCII-armored export headers.
+Restored on import.
 
 .SS list\-keys
 List keys in the keyring.
