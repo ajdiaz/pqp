@@ -61,6 +61,12 @@ pub struct KeyMetadata {
     pub expiration_date: String,
     #[serde(default)]
     pub metadata: Vec<MetadataEntry>,
+    #[serde(default = "default_argon2_mem")]
+    pub argon2_mem: u32,
+    #[serde(default = "default_argon2_time")]
+    pub argon2_time: u32,
+    #[serde(default = "default_argon2_par")]
+    pub argon2_par: u32,
 }
 
 fn default_encoding() -> String {
@@ -73,6 +79,18 @@ fn default_compress() -> String {
 
 fn default_expiration() -> String {
     "expired".into()
+}
+
+fn default_argon2_mem() -> u32 {
+    crate::crypto::sym::DEFAULT_ARGON2_MEM
+}
+
+fn default_argon2_time() -> u32 {
+    crate::crypto::sym::DEFAULT_ARGON2_TIME
+}
+
+fn default_argon2_par() -> u32 {
+    crate::crypto::sym::DEFAULT_ARGON2_PAR
 }
 
 /// Enriched key information including key type and algorithm details.
@@ -93,6 +111,12 @@ pub struct KeyInfo {
     pub expiration_date: String,
     #[serde(default)]
     pub metadata: Vec<MetadataEntry>,
+    #[serde(default = "default_argon2_mem")]
+    pub argon2_mem: u32,
+    #[serde(default = "default_argon2_time")]
+    pub argon2_time: u32,
+    #[serde(default = "default_argon2_par")]
+    pub argon2_par: u32,
 }
 
 /// XDG data directory for pqp (`~/.local/share/pqp/`), with
@@ -262,6 +286,9 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 compress_algorithm: meta.compress_algorithm,
                 expiration_date: meta.expiration_date,
                 metadata: meta.metadata,
+                argon2_mem: meta.argon2_mem,
+                argon2_time: meta.argon2_time,
+                argon2_par: meta.argon2_par,
             });
         }
     }
@@ -283,6 +310,9 @@ pub fn generate_key(
     compress: &str,
     expiration_date: &str,
     metadata: Vec<MetadataEntry>,
+    argon2_mem: u32,
+    argon2_time: u32,
+    argon2_par: u32,
 ) -> Result<KeyMetadata> {
     let keypair = keygen::generate(kem_variant, dsa_variant)?;
 
@@ -300,6 +330,9 @@ pub fn generate_key(
         expiration_date: expiry::parse_expiration(expiration_date)
             .context("parsing expiration date")?,
         metadata,
+        argon2_mem,
+        argon2_time,
+        argon2_par,
     };
 
     let dir = keys_dir()?.join(&key_id);
@@ -318,7 +351,7 @@ pub fn generate_key(
     ]
     .concat();
     let salt = generate_salt()?;
-    let wrapping_key = sym::derive_key(passphrase, &salt)?;
+    let wrapping_key = sym::derive_key(passphrase, &salt, argon2_mem, argon2_time, argon2_par)?;
     let (nonce, encrypted_secret) = sym::encrypt(&wrapping_key, &secret_bytes)?;
 
     let mut wrapped = Vec::new();
@@ -388,7 +421,13 @@ pub fn load_secret_key(
         .map_err(|_| anyhow::anyhow!("invalid nonce length"))?;
     let encrypted = &wrapped[salt_len + nonce_len..];
 
-    let wrapping_key = sym::derive_key(passphrase, salt)?;
+    let wrapping_key = sym::derive_key(
+        passphrase,
+        salt,
+        meta.argon2_mem,
+        meta.argon2_time,
+        meta.argon2_par,
+    )?;
     let mut secret_bytes = sym::decrypt(&wrapping_key, &nonce_arr, encrypted)?;
 
     let kem_sk_len = kem_variant.secret_key_len();
@@ -515,11 +554,22 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         compress_algorithm: "none".into(),
         expiration_date: default_expiration(),
         metadata: Vec::new(),
+        argon2_mem: default_argon2_mem(),
+        argon2_time: default_argon2_time(),
+        argon2_par: default_argon2_par(),
     };
     let conf_toml = toml::to_string_pretty(&meta)?;
     std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
 
     Ok(key_id)
+}
+
+fn validate_key_id(key_id: &str) -> Result<()> {
+    if key_id.len() == 16 && key_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("invalid key ID: {}", key_id))
+    }
 }
 
 /// Import an ASCII-armored public key into the keyring.
@@ -533,6 +583,7 @@ pub fn import_public_key(armored: &str) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("invalid marker: {}", marker))?
         .trim()
         .to_string();
+    validate_key_id(&key_id).context("invalid key ID in armor marker")?;
 
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory for import")?;
@@ -553,6 +604,9 @@ pub fn import_public_key(armored: &str) -> Result<String> {
             compress_algorithm: "none".into(),
             expiration_date: default_expiration(),
             metadata: imported_metadata,
+            argon2_mem: default_argon2_mem(),
+            argon2_time: default_argon2_time(),
+            argon2_par: default_argon2_par(),
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;

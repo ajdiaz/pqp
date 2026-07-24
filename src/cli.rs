@@ -73,6 +73,24 @@ pub enum Commands {
         expiration_date: String,
         #[arg(long = "metadata", help = "Key metadata as key=value (repeatable)")]
         metadata: Vec<String>,
+        #[arg(
+            long = "argon2-mem",
+            default_value = "19456",
+            help = "Argon2id memory cost in KiB (default 19456 ~= 19 MiB)"
+        )]
+        argon2_mem: u32,
+        #[arg(
+            long = "argon2-time",
+            default_value = "2",
+            help = "Argon2id time cost (iterations, default 2)"
+        )]
+        argon2_time: u32,
+        #[arg(
+            long = "argon2-par",
+            default_value = "1",
+            help = "Argon2id parallelism (threads, default 1)"
+        )]
+        argon2_par: u32,
     },
     /// List keys in the keyring.
     #[command(name = "list-keys")]

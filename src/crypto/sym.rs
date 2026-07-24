@@ -4,6 +4,7 @@
 //! uses Argon2id to turn passphrases into 32-byte symmetric keys.
 
 use super::CryptoError;
+use argon2::Params;
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     XChaCha20Poly1305, XNonce,
@@ -17,6 +18,13 @@ pub const NONCE_LEN: usize = 24;
 /// Authentication tag length in bytes (16 bytes).
 #[allow(dead_code)]
 pub const TAG_LEN: usize = 16;
+
+/// Default Argon2id memory cost in KiB (19 MiB).
+pub const DEFAULT_ARGON2_MEM: u32 = 19456;
+/// Default Argon2id time cost (iterations).
+pub const DEFAULT_ARGON2_TIME: u32 = 2;
+/// Default Argon2id parallelism (threads).
+pub const DEFAULT_ARGON2_PAR: u32 = 1;
 
 /// Encrypt plaintext with XChaCha20-Poly1305 using the given key.
 ///
@@ -61,10 +69,21 @@ pub fn decrypt(
 }
 
 /// Derive a 32-byte symmetric key from a passphrase and salt using Argon2id.
-pub fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; KEY_LEN], CryptoError> {
+///
+/// `mem_cost` is in KiB, `time_cost` is the number of iterations,
+/// `par_cost` is the degree of parallelism.
+pub fn derive_key(
+    passphrase: &str,
+    salt: &[u8],
+    mem_cost: u32,
+    time_cost: u32,
+    par_cost: u32,
+) -> Result<[u8; KEY_LEN], CryptoError> {
     use argon2::Argon2;
 
-    let argon2 = Argon2::default();
+    let params = Params::new(mem_cost, time_cost, par_cost, None)
+        .map_err(|e| CryptoError::Encrypt(format!("invalid Argon2 params: {}", e)))?;
+    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut key = [0u8; KEY_LEN];
     argon2
         .hash_password_into(passphrase.as_bytes(), salt, &mut key)

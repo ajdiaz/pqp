@@ -21,6 +21,9 @@ complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l encoding -d "Enco
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l compress -d "Default compression algorithm preference" -r -xa "none zstd gzip bzip2 lzma"
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l expiration-date -d "Key expiration date" -r
 complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l metadata -d "Key metadata as key=value (repeatable)" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l argon2-mem -d "Argon2id memory cost in KiB" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l argon2-time -d "Argon2id time cost (iterations)" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from gen-key" -l argon2-par -d "Argon2id parallelism (threads)" -r
 
 # --- list-keys ---
 complete -c pqp -f -n "__fish_use_subcommand" -a list-keys -d "List keys in the keyring"

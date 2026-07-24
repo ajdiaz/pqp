@@ -16,50 +16,26 @@ use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 fn read_passphrase(prompt: &str) -> Result<String> {
-    let result = rpassword::prompt_password(prompt);
-    match result {
+    match rpassword::prompt_password(prompt) {
         Ok(p) => Ok(p),
-        Err(_e) => {
-            eprint!("{}", prompt);
-            let mut pass = String::new();
-            std::io::stdin().read_line(&mut pass)?;
-            if pass.ends_with('\n') {
-                pass.pop();
-                if pass.ends_with('\r') {
-                    pass.pop();
-                }
-            }
-            Ok(pass)
-        }
+        Err(_e) => Err(anyhow::anyhow!(
+            "cannot read passphrase without a TTY (try --no-passphrase)"
+        )),
     }
 }
 
 fn confirm_import(key_id: &str) -> Result<bool> {
     let prompt = format!("Import key {}? [y/N] ", key_id);
-    #[cfg(unix)]
-    {
-        let mut tty = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open("/dev/tty")
-            .context("opening /dev/tty for confirmation")?;
-        tty.write_all(prompt.as_bytes())?;
-        let mut answer = String::new();
-        tty.read_to_string(&mut answer)?;
-        let answer = answer.trim().to_lowercase();
-        Ok(answer == "y" || answer == "yes")
-    }
-    #[cfg(not(unix))]
-    {
-        eprint!("{}", prompt);
-        let mut answer = String::new();
-        std::io::stdin().read_line(&mut answer)?;
-        let answer = answer.trim().to_lowercase();
-        Ok(answer == "y" || answer == "yes")
-    }
+    eprint!("{}", prompt);
+    std::io::stderr().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let answer = answer.trim().to_lowercase();
+    Ok(answer == "y" || answer == "yes")
 }
 
 fn read_input(input: &Option<String>) -> Result<Vec<u8>> {
@@ -122,6 +98,9 @@ fn main() -> Result<()> {
             mut compress,
             mut expiration_date,
             metadata,
+            mut argon2_mem,
+            mut argon2_time,
+            mut argon2_par,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would gen-key: no action taken");
@@ -150,6 +129,24 @@ fn main() -> Result<()> {
                 }
                 passphrase
             };
+            argon2_mem = config::apply_u32(
+                argon2_mem,
+                cmd_cfg,
+                "argon2-mem",
+                pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+            );
+            argon2_time = config::apply_u32(
+                argon2_time,
+                cmd_cfg,
+                "argon2-time",
+                pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+            );
+            argon2_par = config::apply_u32(
+                argon2_par,
+                cmd_cfg,
+                "argon2-par",
+                pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+            );
             let metadata_entries: Vec<keyring::MetadataEntry> = metadata
                 .iter()
                 .filter_map(|s| {
@@ -175,7 +172,13 @@ fn main() -> Result<()> {
                 &compress,
                 &expiration_date,
                 metadata_entries,
+                argon2_mem,
+                argon2_time,
+                argon2_par,
             )?;
+            // passphrase consumed by generate_key above; zeroize after last use
+            let mut passphrase_bytes = passphrase.into_bytes();
+            passphrase_bytes.zeroize();
             println!("Generated key pair: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);
             println!("  created: {}", meta.created_at);
@@ -419,6 +422,11 @@ fn main() -> Result<()> {
                 None
             } else {
                 let alg_str = compress.to_uppercase();
+                eprintln!(
+                    "Warning: compression before encryption can leak plaintext length \
+                     (CRIME/BREACH attack). Avoid compressing data that mixes \
+                     attacker-controlled and secret content."
+                );
                 Some(
                     format::Algorithm::from_str(&alg_str)
                         .context("unknown compression algorithm")?,
@@ -431,16 +439,27 @@ fn main() -> Result<()> {
                 data
             };
 
-            let (kem_pk, _, kem_alg, _) =
+            let (mut kem_pk_bytes, _, kem_alg, _) =
                 keyring::load_public_key(&recipient_id).context("loading recipient public key")?;
             let kem_variant = KemVariant::parse(&kem_alg)
                 .context(format!("unknown KEM algorithm: {}", kem_alg))?;
-            let kem_pk = crypto::kem::PublicKey::from_bytes(&kem_pk, kem_variant)?;
+            let kem_pk = crypto::kem::PublicKey::from_bytes(&kem_pk_bytes, kem_variant)?;
+            kem_pk_bytes.zeroize();
 
-            let (ct, shared_secret) = crypto::kem::encapsulate(&kem_pk)?;
+            let (ct, mut shared_secret) = crypto::kem::encapsulate(&kem_pk)?;
+
+            // KEM shared secret → symmetric key via SHA3-256 KDF (NIST SP 800-56C)
+            use sha3::{Digest, Sha3_256};
+            let mut kdf = Sha3_256::new();
+            kdf.update(shared_secret);
+            let sym_key = kdf.finalize();
+            shared_secret.zeroize();
+            let mut sym_key_arr = [0u8; 32];
+            sym_key_arr.copy_from_slice(&sym_key);
 
             let (nonce, ciphertext) =
-                sym::encrypt(&shared_secret, &plaintext).context("symmetric encryption failed")?;
+                sym::encrypt(&sym_key_arr, &plaintext).context("symmetric encryption failed")?;
+            sym_key_arr.zeroize();
 
             let mut payload = ct.to_vec();
             payload.extend_from_slice(&nonce);
@@ -459,15 +478,18 @@ fn main() -> Result<()> {
             if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
                 let mut passphrase = passphrase.unwrap();
-                let (_, sign_sk, _sign_alg_kem, sign_alg) =
+                let (mut kem_sk_bytes, mut sign_sk_bytes, _sign_alg_kem, sign_alg) =
                     keyring::load_secret_key(sid, &passphrase)
                         .context("loading signer secret key")?;
                 passphrase.zeroize();
 
                 let dsa_variant = DsaVariant::parse(&sign_alg)
                     .context(format!("unknown sign algorithm: {}", sign_alg))?;
-                let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk)?;
+                let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk_bytes)?;
                 let signature = sign::sign(&sign_sk, &payload, dsa_variant)?;
+                drop(sign_sk);
+                sign_sk_bytes.zeroize();
+                kem_sk_bytes.zeroize();
                 payload.extend_from_slice(&signature);
             }
 
@@ -511,38 +533,60 @@ fn main() -> Result<()> {
                 return Err(anyhow::anyhow!("payload too short"));
             }
 
+            let mut passphrase_vec = passphrase.into_bytes();
             let keys = keyring::list_keys()?;
             let mut decrypted = None;
             for key in &keys {
-                if let Ok((kem_sk, _, kem_alg, _)) =
-                    keyring::load_secret_key(&key.key_id, &passphrase)
+                let pp = std::str::from_utf8(&passphrase_vec)?;
+                if let Ok((mut kem_sk_bytes, _, kem_alg, _)) =
+                    keyring::load_secret_key(&key.key_id, pp)
                 {
                     if let Some(kem_variant) = KemVariant::parse(&kem_alg) {
                         let ct_len = kem_variant.ciphertext_len();
                         if payload.len() < ct_len + nonce_len {
+                            kem_sk_bytes.zeroize();
                             continue;
                         }
                         let ct = &payload[..ct_len];
                         let nonce_arr: [u8; 24] =
                             match payload[ct_len..ct_len + nonce_len].try_into() {
                                 Ok(n) => n,
-                                Err(_) => continue,
+                                Err(_) => {
+                                    kem_sk_bytes.zeroize();
+                                    continue;
+                                }
                             };
                         let sym_ciphertext = &payload[ct_len + nonce_len..];
-                        let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk) {
+                        let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk_bytes) {
                             Ok(sk) => sk,
-                            Err(_) => continue,
+                            Err(_) => {
+                                kem_sk_bytes.zeroize();
+                                continue;
+                            }
                         };
+                        kem_sk_bytes.zeroize();
                         if let Ok(shared) = crypto::kem::decapsulate(&kem_sk, ct, kem_variant) {
-                            if let Ok(plaintext) = sym::decrypt(&shared, &nonce_arr, sym_ciphertext)
+                            // KDF shared secret to symmetric key (NIST SP 800-56C)
+                            use sha3::{Digest, Sha3_256};
+                            let mut kdf = Sha3_256::new();
+                            kdf.update(shared);
+                            let sym_key = kdf.finalize();
+                            let mut sym_key_arr = [0u8; 32];
+                            sym_key_arr.copy_from_slice(&sym_key);
+                            if let Ok(plaintext) =
+                                sym::decrypt(&sym_key_arr, &nonce_arr, sym_ciphertext)
                             {
+                                sym_key_arr.zeroize();
                                 decrypted = Some(plaintext);
                                 break;
                             }
+                            sym_key_arr.zeroize();
                         }
                     }
                 }
             }
+
+            passphrase_vec.zeroize();
 
             let mut plaintext = decrypted.ok_or_else(|| {
                 anyhow::anyhow!("decryption failed: no matching key or wrong passphrase")
@@ -587,12 +631,16 @@ fn main() -> Result<()> {
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
-            let (_, sign_sk, _, sign_alg) =
-                keyring::load_secret_key(&user_id, &passphrase).context("loading secret key")?;
+            let mut passphrase_vec = passphrase.into_bytes();
+            let pp = std::str::from_utf8(&passphrase_vec)?;
+            let (_, mut sign_sk_bytes, _, sign_alg) =
+                keyring::load_secret_key(&user_id, pp).context("loading secret key")?;
+            passphrase_vec.zeroize();
             let dsa_variant = DsaVariant::parse(&sign_alg)
                 .context(format!("unknown sign algorithm: {}", sign_alg))?;
 
-            let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk)?;
+            let sign_sk = crypto::sign::SecretKey::from_bytes(&sign_sk_bytes)?;
+            sign_sk_bytes.zeroize();
 
             use sha3::{Digest, Sha3_256};
             let mut hasher = Sha3_256::new();
@@ -644,7 +692,7 @@ fn main() -> Result<()> {
             hasher.update(&orig_data);
             let computed_hash = hasher.finalize();
 
-            if stored_hash != computed_hash.as_slice() {
+            if stored_hash.ct_ne(computed_hash.as_slice()).into() {
                 return Err(anyhow::anyhow!("hash mismatch: file has been modified"));
             }
 
@@ -685,32 +733,14 @@ fn main() -> Result<()> {
                 let meta = keyring::read_metadata(kid)?;
                 if !dont_ask {
                     let prompt = format!("Remove key {} (user: {})? [y/N] ", kid, meta.user_id);
-                    #[cfg(unix)]
-                    {
-                        let mut tty = std::fs::OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .open("/dev/tty")
-                            .context("opening /dev/tty for confirmation")?;
-                        tty.write_all(prompt.as_bytes())?;
-                        let mut answer = String::new();
-                        tty.read_to_string(&mut answer)?;
-                        let answer = answer.trim().to_lowercase();
-                        if answer != "y" && answer != "yes" {
-                            println!("Skipped key {}.", kid);
-                            continue;
-                        }
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        eprint!("{}", prompt);
-                        let mut answer = String::new();
-                        std::io::stdin().read_line(&mut answer)?;
-                        let answer = answer.trim().to_lowercase();
-                        if answer != "y" && answer != "yes" {
-                            println!("Skipped key {}.", kid);
-                            continue;
-                        }
+                    eprint!("{}", prompt);
+                    std::io::stderr().flush()?;
+                    let mut answer = String::new();
+                    std::io::stdin().read_line(&mut answer)?;
+                    let answer = answer.trim().to_lowercase();
+                    if answer != "y" && answer != "yes" {
+                        println!("Skipped key {}.", kid);
+                        continue;
                     }
                 }
 

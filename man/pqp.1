@@ -170,6 +170,23 @@ LZMA.  Best ratio, slowest.
 Key metadata as key=value pairs.  Repeatable for multiple entries.
 Stored in pqp.conf and included in ASCII-armored export headers.
 Restored on import.
+.TP
+\fB\-\-argon2\-mem\fR \fI\,KIB\/\fR
+Argon2id memory cost in kibibytes.  Default: \fB19456\fR (~19 MiB).
+
+Higher values increase GPU/ASIC resistance at the cost of RAM.
+The default (19456 KiB) is the libargon2 recommended minimum.
+Use 65536 (64 MiB) for high-security environments.
+.TP
+\fB\-\-argon2\-time\fR \fI\,COUNT\/\fR
+Argon2id time cost (iterations).  Default: \fB2\fR.
+
+Each iteration doubles the work for both user and attacker.
+.TP
+\fB\-\-argon2\-par\fR \fI\,COUNT\/\fR
+Argon2id parallelism (threads).  Default: \fB1\fR.
+
+Higher values speed up derivation on multi-core CPUs.
 
 .SS list\-keys
 List keys in the keyring.

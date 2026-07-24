@@ -115,6 +115,26 @@ pub fn apply_bool(
     hard_default
 }
 
+/// Apply a config override for a u32-typed CLI option.
+pub fn apply_u32(
+    cli: u32,
+    config_section: Option<&HashMap<String, Value>>,
+    key: &str,
+    hard_default: u32,
+) -> u32 {
+    if cli != hard_default {
+        return cli;
+    }
+    if let Some(section) = config_section {
+        if let Some(Value::Integer(val)) = section.get(key) {
+            if let Ok(v) = u32::try_from(*val) {
+                return v;
+            }
+        }
+    }
+    hard_default
+}
+
 /// Return the config section for a given command name, if present.
 pub fn section<'a>(
     config: &'a HashMap<String, HashMap<String, Value>>,

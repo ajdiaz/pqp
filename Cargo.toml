@@ -26,6 +26,7 @@ zstd = "0.13"
 flate2 = "1"
 ascii85 = "0.1"
 zeroize = { version = "1", features = ["zeroize_derive"] }
+subtle = "2"
 ureq = "3"
 bzip2 = "0.5"
 lzma-rs = "0.3"

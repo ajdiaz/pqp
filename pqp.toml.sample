@@ -141,6 +141,35 @@ expiration-date = "5y"
 #   ]
 metadata = []
 
+# Argon2id key derivation parameters.
+# Controls the memory and time cost of passphrase-to-key derivation.
+# Higher values increase brute-force resistance but slow down key
+# operations (gen-key, decrypt, sign with passphrase).
+#
+# These values are stored per-key in pqp.conf and auto-used on load.
+# Changing them only affects newly generated keys.
+#
+# Possible values:
+#   argon2-mem = <N>  — Memory cost in KiB [default: 19456 ~= 19 MiB].
+#                       Range: 8 to 2^31-1. Higher = more resistant
+#                       to GPU/ASIC brute-force but uses more RAM.
+#                       19456 is the libargon2 recommended minimum.
+#
+#   argon2-time = <N> — Time cost (iterations) [default: 2].
+#                       Range: 1 to 2^32-1. Higher = slower derivation,
+#                       linearly more work per guess.
+#
+#   argon2-par = <N>  — Parallelism (thread count) [default: 1].
+#                       Range: 1 to 2^24-1. Higher = faster on multi-core
+#                       but less memory-hard per thread.
+#
+# Security guidance:
+#   For high-security environments, consider argon2-mem = 65536 (64 MiB)
+#   and argon2-time = 3. For low-power devices, keep defaults.
+argon2-mem = 19456
+argon2-time = 2
+argon2-par = 1
+
 # ── list-keys ──────────────────────────────────────────────────────────
 # Default output format for listing keys.
 # CLI flag --format overrides this.

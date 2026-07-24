@@ -74,7 +74,10 @@ _pqp_gen_key() {
         '--encoding[Encoding for armored output]:encoding:(BASE64 ASCII85)' \
         '--compress[Default compression algorithm preference]:compress:(none zstd gzip bzip2 lzma)' \
         '--expiration-date[Key expiration date]:expiration:' \
-        '--metadata[Key metadata as key=value (repeatable)]:metadata:'
+        '--metadata[Key metadata as key=value (repeatable)]:metadata:' \
+        '--argon2-mem[Argon2id memory cost in KiB]:mem size:' \
+        '--argon2-time[Argon2id time cost (iterations)]:iterations:' \
+        '--argon2-par[Argon2id parallelism (threads)]:threads:'
 }
 
 _pqp_list_keys() {

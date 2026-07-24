@@ -158,6 +158,9 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
 | `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
 | `[gen-key]` | `metadata` | arbitrary `key=value` pairs | (none) | stored in pqp.conf and armor headers; not interpreted |
+| `[gen-key]` | `argon2-mem` | KiB (e.g. `19456`, `65536`) | `19456` (~19 MiB) | higher = more GPU/ASIC resistance, more RAM |
+| `[gen-key]` | `argon2-time` | iterations (e.g. `2`, `3`) | `2` | higher = slower derivation, linearly more work |
+| `[gen-key]` | `argon2-par` | threads (e.g. `1`, `4`) | `1` | higher = faster on multi-core, less memory-hard |
 | `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | `table` human-friendly, `no-headers` for scripts, `json` for programs |
@@ -189,7 +192,7 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 
 ### ⚙️ Per-command options
 
-**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>` · `--metadata <key=value>`
+**gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>` · `--metadata <key=value>` · `--argon2-mem <kib>` · `--argon2-time <count>` · `--argon2-par <count>`
 
 **list-keys:** `--format <table|no-headers|json>`
 

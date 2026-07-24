@@ -21,6 +21,9 @@ fn test_gen_key_and_list_keys() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -211,14 +214,35 @@ fn test_sym_encrypt_wrong_key() {
 fn test_key_derivation() {
     let passphrase = "my-secure-passphrase";
     let salt = [0xABu8; 16];
-    let key = pqp::crypto::sym::derive_key(passphrase, &salt).unwrap();
+    let key = pqp::crypto::sym::derive_key(
+        passphrase,
+        &salt,
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
     assert_eq!(key.len(), 32);
 
-    let key2 = pqp::crypto::sym::derive_key(passphrase, &salt).unwrap();
+    let key2 = pqp::crypto::sym::derive_key(
+        passphrase,
+        &salt,
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
     assert_eq!(key, key2);
 
     let salt2 = [0xBAu8; 16];
-    let key3 = pqp::crypto::sym::derive_key(passphrase, &salt2).unwrap();
+    let key3 = pqp::crypto::sym::derive_key(
+        passphrase,
+        &salt2,
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
     assert_ne!(key, key3);
 }
 
@@ -247,6 +271,9 @@ fn test_cli_sign_verify_stdin() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -306,6 +333,9 @@ fn test_gen_key_no_passphrase() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert_eq!(meta.user_id, "nopass@example.com");

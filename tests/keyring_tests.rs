@@ -53,6 +53,9 @@ fn test_generate_and_export() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
@@ -86,6 +89,9 @@ fn test_generate_and_load_keys() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -124,6 +130,9 @@ fn test_key_info_fields() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -152,6 +161,9 @@ fn test_key_expiration_relative() {
         "none",
         "30d",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert!(!meta.expiration_date.is_empty());
@@ -176,6 +188,9 @@ fn test_key_expiration_absolute() {
         "none",
         "2030-06-15",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert!(meta.expiration_date.starts_with("2030-06-15"));
@@ -196,6 +211,9 @@ fn test_key_expired_check() {
         "none",
         "2000-01-01",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     assert!(pqp::expiry::is_expired(&meta.expiration_date));
@@ -214,6 +232,9 @@ fn test_resolve_key_id_by_key_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -233,6 +254,9 @@ fn test_resolve_key_id_by_user_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -260,6 +284,9 @@ fn test_key_info_public_only_key() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -282,6 +309,9 @@ fn test_import_with_confirmation() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -317,6 +347,9 @@ fn test_remove_key_public_only() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -348,6 +381,9 @@ fn test_remove_key_public_and_private() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -380,6 +416,9 @@ fn test_resolve_key_ids_by_key_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -399,6 +438,9 @@ fn test_resolve_key_ids_by_user_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -410,6 +452,9 @@ fn test_resolve_key_ids_by_user_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -437,6 +482,9 @@ fn test_cli_remove_key_public_only() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -468,6 +516,9 @@ fn test_cli_remove_key_public_and_private() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let key_id = meta.key_id.clone();
@@ -499,6 +550,9 @@ fn test_cli_remove_key_by_user_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     pqp::keyring::generate_key(
@@ -510,6 +564,9 @@ fn test_cli_remove_key_by_user_id() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -554,6 +611,9 @@ fn test_list_keys_json_format() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -582,6 +642,9 @@ fn test_list_keys_no_headers_format() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -609,6 +672,9 @@ fn test_import_from_stdin() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
@@ -644,6 +710,9 @@ fn test_export_public_key_pqp_format() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -678,6 +747,9 @@ fn test_import_public_key_from_pqp() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -716,6 +788,9 @@ fn test_cli_export_pqp_format() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -756,6 +831,9 @@ fn test_cli_import_pqp_format() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -792,6 +870,9 @@ fn test_pqp_format_roundtrip() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
@@ -831,6 +912,9 @@ fn test_pqp_format_compressed_roundtrip() {
             "none",
             "5y",
             Vec::new(),
+            pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+            pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+            pqp::crypto::sym::DEFAULT_ARGON2_PAR,
         )
         .unwrap();
 
@@ -868,6 +952,9 @@ fn test_cli_export_pqp_with_compression() {
         "none",
         "5y",
         Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
     )
     .unwrap();
 
