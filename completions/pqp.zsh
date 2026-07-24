@@ -22,6 +22,7 @@ _pqp() {
 
     args=(
         '(-n --dry-run)'{-n,--dry-run}'[Do nothing, print dry-run message]'
+        '--keyring-path[Use an alternative keyring directory]:keyring path:_files -/'
         '*: :->subcmd'
     )
 

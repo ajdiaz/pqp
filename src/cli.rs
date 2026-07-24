@@ -19,6 +19,14 @@ pub struct Cli {
     )]
     pub dry_run: bool,
 
+    /// Path to an alternative keyring directory.
+    #[arg(
+        long = "keyring-path",
+        global = true,
+        help = "Path to an alternative keyring directory"
+    )]
+    pub keyring_path: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -129,8 +129,9 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 ### 🌐 Global flags
 
 | Flag | Description |
-|---|---|
+|---|---|---|
 | `--dry-run`, `-n` | Print dry-run message and exit without action |
+| `--keyring-path <path>` | Use alternative keyring directory |
 
 ### ⚙️ Global configuration file
 
@@ -163,6 +164,7 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd = best speed/ratio, lzma = best ratio/slowest, none = raw |
 | `[export]` | `format` | `armor`, `pqp` | `armor` | armor = universal pasteable, pqp = self-describing & compact |
 | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | Only for PQP format; same trade-offs as encrypt |
+| `[keyring]` | `path` | any directory path | (none) | overrides default keyring location (XDG / PQP_HOME) |
 
 Example with non-default choices:
 

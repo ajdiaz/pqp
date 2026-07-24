@@ -7,7 +7,7 @@ _pqp() {
     _init_completion || return
 
     # Global flags available before any subcommand
-    local global_opts='-n --dry-run --help -h'
+    local global_opts='-n --dry-run --keyring-path --help -h'
 
     # Subcommands
     local commands='gen-key list-keys encrypt decrypt sign verify export remove-key import'
@@ -19,7 +19,17 @@ _pqp() {
                 COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
                 return
                 ;;
+            --keyring-path)
+                COMPREPLY=($(compgen -f -- "$cur"))
+                return
+                ;;
         esac
+    fi
+
+    # --keyring-path takes a directory argument at any position
+    if [[ "$prev" == "--keyring-path" ]]; then
+        COMPREPLY=($(compgen -f -- "$cur"))
+        return
     fi
 
     # Past subcommand — complete flags for that subcommand

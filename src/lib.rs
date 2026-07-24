@@ -45,6 +45,7 @@
 //! | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd best speed/ratio, lzma best ratio/slowest |
 //! | `[export]` | `format` | `armor`, `pqp` | `armor` | armor universal, pqp self-describing |
 //! | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | only for PQP format |
+//! | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location |
 //!
 //! Example `~/.config/pqp/pqp.toml`:
 //! ```toml
@@ -59,6 +60,7 @@
 //! # Global flags
 //!
 //! * `--dry-run` / `-n` — print a dry-run message to stderr and exit without action
+//! * `--keyring-path <path>` — use an alternative keyring directory instead of the default
 //!
 //! # Commands in detail
 //!

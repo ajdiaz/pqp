@@ -14,6 +14,7 @@ use pqp::crypto::DsaVariant;
 use pqp::crypto::KemVariant;
 use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::str::FromStr;
 use zeroize::Zeroize;
 
@@ -96,6 +97,16 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let cfg = config::load()?;
+
+    // Resolve keyring path: CLI --keyring-path > config [keyring].path > default
+    let keyring_path = cli.keyring_path.clone().or_else(|| {
+        config::section(&cfg, "keyring")
+            .and_then(|s| s.get("path"))
+            .and_then(|v| v.as_str().map(String::from))
+    });
+    if let Some(ref path) = keyring_path {
+        keyring::set_keyring_override(Some(PathBuf::from(path)));
+    }
 
     match cli.command {
         Commands::GenKey {

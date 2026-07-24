@@ -24,6 +24,11 @@ executed.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help information.
+.TP
+\fB\-\-keyring\-path\fR \fI\,PATH\/\fR
+Use an alternative keyring directory instead of the default XDG / PQP_HOME
+resolution. All keyring operations (listing, generating, importing,
+exporting, removing keys, etc.) read from and write to this directory.
 
 .SH CONFIGURATION FILE
 \fBpqp\fR reads \fI~/.config/pqp/pqp.toml\fR (XDG config directory) if

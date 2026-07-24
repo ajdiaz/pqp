@@ -251,3 +251,19 @@ format = "armor"
 #
 #   "lzma"         — LZMA compression. Best ratio, slowest.
 compress = "zstd"
+
+# ── keyring ─────────────────────────────────────────────────────────────
+# Override the default keyring directory path.
+# By default, pqp stores keys in ~/.local/share/pqp/keys/ (XDG data dir),
+# falling back to ~/.pqp/keys/ for backward compatibility, or using
+# $PQP_HOME/.pqp/keys/ when the PQP_HOME environment variable is set.
+#
+# Setting this option overrides all default resolution and uses the given
+# directory as the keyring root. All keyring operations (listing, generating,
+# importing, exporting, removing) read from and write to this directory.
+#
+# The CLI flag --keyring-path takes precedence over this config value.
+#
+# Example:
+#   path = "/mnt/usb/pqp-keys"
+# path = ""
