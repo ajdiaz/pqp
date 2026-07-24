@@ -29,6 +29,8 @@ Print help information.
 Use an alternative keyring directory instead of the default XDG / PQP_HOME
 resolution. All keyring operations (listing, generating, importing,
 exporting, removing keys, etc.) read from and write to this directory.
+The \fBKEYRING_PATH\fR environment variable and \fI[keyring]\fR config
+section \fIpath\fR key serve the same purpose; this flag takes precedence.
 
 .SH CONFIGURATION FILE
 \fBpqp\fR reads \fI~/.config/pqp/pqp.toml\fR (XDG config directory) if
@@ -41,6 +43,11 @@ If set, overrides the XDG paths entirely.  Keys will be stored under
 \fI$PQP_HOME/.pqp/keys/\fR and config read from \fI$PQP_HOME/.pqp/pqp.toml\fR.
 This is useful for running multiple isolated pqp instances.
 
+.TP
+\fBKEYRING_PATH\fR
+If set, uses this directory as the keyring root instead of the default
+XDG / PQP_HOME resolution.  Lower precedence than \fB--keyring-path\fR
+but higher than the \fI[keyring]\fR config file setting.
 .TP
 \fBHOME\fR
 Used as fallback when XDG directories cannot be determined.

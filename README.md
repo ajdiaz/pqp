@@ -131,7 +131,7 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 | Flag | Description |
 |---|---|---|
 | `--dry-run`, `-n` | Print dry-run message and exit without action |
-| `--keyring-path <path>` | Use alternative keyring directory |
+| `--keyring-path <path>` | Use alternative keyring directory (or set `KEYRING_PATH` env var) |
 
 ### ⚙️ Global configuration file
 

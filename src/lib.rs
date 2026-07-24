@@ -61,6 +61,7 @@
 //!
 //! * `--dry-run` / `-n` — print a dry-run message to stderr and exit without action
 //! * `--keyring-path <path>` — use an alternative keyring directory instead of the default
+//!   (also configurable via `KEYRING_PATH` env var or `[keyring].path` in config)
 //!
 //! # Commands in detail
 //!

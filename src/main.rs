@@ -98,12 +98,16 @@ fn main() -> Result<()> {
 
     let cfg = config::load()?;
 
-    // Resolve keyring path: CLI --keyring-path > config [keyring].path > default
-    let keyring_path = cli.keyring_path.clone().or_else(|| {
-        config::section(&cfg, "keyring")
-            .and_then(|s| s.get("path"))
-            .and_then(|v| v.as_str().map(String::from))
-    });
+    // Resolve keyring path: CLI --keyring-path > KEYRING_PATH env > config [keyring].path > default
+    let keyring_path = cli
+        .keyring_path
+        .clone()
+        .or_else(|| std::env::var("KEYRING_PATH").ok())
+        .or_else(|| {
+            config::section(&cfg, "keyring")
+                .and_then(|s| s.get("path"))
+                .and_then(|v| v.as_str().map(String::from))
+        });
     if let Some(ref path) = keyring_path {
         keyring::set_keyring_override(Some(PathBuf::from(path)));
     }

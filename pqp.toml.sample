@@ -262,7 +262,8 @@ compress = "zstd"
 # directory as the keyring root. All keyring operations (listing, generating,
 # importing, exporting, removing) read from and write to this directory.
 #
-# The CLI flag --keyring-path takes precedence over this config value.
+# The CLI flag --keyring-path takes precedence over this config value,
+# as does the KEYRING_PATH environment variable.
 #
 # Example:
 #   path = "/mnt/usb/pqp-keys"
