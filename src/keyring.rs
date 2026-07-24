@@ -121,6 +121,9 @@ fn keys_dir() -> Result<PathBuf> {
     if let Some(Some(override_path)) = KEYRING_OVERRIDE.get() {
         return Ok(override_path.clone());
     }
+    if let Ok(env_path) = std::env::var("KEYRING_PATH") {
+        return Ok(PathBuf::from(env_path));
+    }
     Ok(pqp_dir()?.join("keys"))
 }
 

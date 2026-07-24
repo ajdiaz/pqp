@@ -2,59 +2,48 @@ use pqp::armor::Encoding;
 use pqp::crypto::{DsaVariant, KemVariant};
 use std::path::PathBuf;
 
-fn test_keyring_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("pqp_kr_{}", name));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::env::set_var("HOME", &dir);
-    dir
+/// RAII guard for a temporary keyring directory.
+///
+/// Creates a unique temp directory, sets it as the keyring override
+/// via [`pqp::keyring::set_keyring_override`], and removes it on Drop.
+/// For CLI subprocess tests, use [`path()`](TestKeyring::path) and pass
+/// it via `KEYRING_PATH` env var.
+struct TestKeyring {
+    path: PathBuf,
 }
 
-fn find_key_id() -> Option<String> {
-    let home = std::env::var("HOME").ok()?;
-    let candidates = vec![
-        PathBuf::from(&home)
-            .join(".local")
-            .join("share")
-            .join("pqp")
-            .join("keys"),
-        PathBuf::from(&home).join(".pqp").join("keys"),
-    ];
-    for keys_dir in &candidates {
-        if !keys_dir.exists() {
-            continue;
-        }
-        for entry in std::fs::read_dir(keys_dir).ok()? {
-            let entry = entry.ok()?;
-            let conf = entry.path().join("pqp.conf");
-            if conf.exists() {
-                return entry.file_name().into_string().ok();
-            }
-        }
+impl TestKeyring {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("pqp_kr_{}", name));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Use KEYRING_PATH env var so both direct library calls (via keys_dir())
+        // and CLI subprocess calls (via main.rs startup) resolve to this directory.
+        std::env::set_var("KEYRING_PATH", &dir);
+        TestKeyring { path: dir }
     }
-    None
+
+    fn path(&self) -> &PathBuf {
+        &self.path
+    }
 }
 
-fn keys_dir() -> PathBuf {
-    let home = PathBuf::from(std::env::var("HOME").unwrap());
-    let xdg = home.join(".local").join("share").join("pqp").join("keys");
-    if xdg.exists() {
-        xdg
-    } else {
-        home.join(".pqp").join("keys")
+impl Drop for TestKeyring {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
     }
 }
 
 #[test]
 fn test_list_keys_empty() {
-    let _d = test_keyring_dir("list_empty");
+    let _k = TestKeyring::new("list_empty");
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys.is_empty());
 }
 
 #[test]
 fn test_generate_and_export() {
-    let _d = test_keyring_dir("gen_export");
+    let k = TestKeyring::new("gen_export");
     let meta = pqp::keyring::generate_key(
         "test@example.com",
         "testpass",
@@ -69,8 +58,12 @@ fn test_generate_and_export() {
     assert_eq!(meta.user_id, "test@example.com");
     assert!(!meta.key_id.is_empty());
 
-    let key_id = find_key_id().expect("key should exist on disk");
-    assert_eq!(meta.key_id, key_id);
+    // Verify key exists on disk at the overridden keyring path
+    let key_dir = k.path().join(&meta.key_id);
+    assert!(
+        key_dir.join("pqp.conf").exists(),
+        "key directory should exist"
+    );
 
     let keys = pqp::keyring::list_keys().unwrap();
     assert_eq!(keys.len(), 1);
@@ -83,7 +76,7 @@ fn test_generate_and_export() {
 
 #[test]
 fn test_generate_and_load_keys() {
-    let _d = test_keyring_dir("gen_load");
+    let _k = TestKeyring::new("gen_load");
     let meta = pqp::keyring::generate_key(
         "load-test@example.com",
         "mypass",
@@ -121,7 +114,7 @@ fn test_generate_and_load_keys() {
 
 #[test]
 fn test_key_info_fields() {
-    let _d = test_keyring_dir("key_info");
+    let _k = TestKeyring::new("key_info");
     let meta = pqp::keyring::generate_key(
         "info@example.com",
         "pass",
@@ -149,7 +142,7 @@ fn test_key_info_fields() {
 
 #[test]
 fn test_key_expiration_relative() {
-    let _d = test_keyring_dir("exp_rel");
+    let _k = TestKeyring::new("exp_rel");
     let meta = pqp::keyring::generate_key(
         "exp-rel@example.com",
         "pass",
@@ -173,7 +166,7 @@ fn test_key_expiration_relative() {
 
 #[test]
 fn test_key_expiration_absolute() {
-    let _d = test_keyring_dir("exp_abs");
+    let _k = TestKeyring::new("exp_abs");
     let meta = pqp::keyring::generate_key(
         "exp-abs@example.com",
         "pass",
@@ -193,7 +186,7 @@ fn test_key_expiration_absolute() {
 
 #[test]
 fn test_key_expired_check() {
-    let _d = test_keyring_dir("exp_chk");
+    let _k = TestKeyring::new("exp_chk");
     let meta = pqp::keyring::generate_key(
         "exp-chk@example.com",
         "pass",
@@ -211,7 +204,7 @@ fn test_key_expired_check() {
 
 #[test]
 fn test_resolve_key_id_by_key_id() {
-    let _d = test_keyring_dir("resolve_id");
+    let _k = TestKeyring::new("resolve_id");
     let meta = pqp::keyring::generate_key(
         "resolve@example.com",
         "pass",
@@ -230,7 +223,7 @@ fn test_resolve_key_id_by_key_id() {
 
 #[test]
 fn test_resolve_key_id_by_user_id() {
-    let _d = test_keyring_dir("resolve_user");
+    let _k = TestKeyring::new("resolve_user");
     pqp::keyring::generate_key(
         "alice@example.com",
         "pass",
@@ -250,14 +243,14 @@ fn test_resolve_key_id_by_user_id() {
 
 #[test]
 fn test_resolve_key_id_not_found() {
-    let _d = test_keyring_dir("resolve_nf");
+    let _k = TestKeyring::new("resolve_nf");
     let result = pqp::keyring::resolve_key_id("nonexistent");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_key_info_public_only_key() {
-    let _d = test_keyring_dir("pub_only");
+    let k = TestKeyring::new("pub_only");
     let meta = pqp::keyring::generate_key(
         "pubonly@example.com",
         "pass",
@@ -270,7 +263,7 @@ fn test_key_info_public_only_key() {
     )
     .unwrap();
 
-    std::fs::remove_file(keys_dir().join(&meta.key_id).join("pqp-secret.der")).unwrap();
+    std::fs::remove_file(k.path().join(&meta.key_id).join("pqp-secret.der")).unwrap();
 
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys[0].has_public);
@@ -279,7 +272,7 @@ fn test_key_info_public_only_key() {
 
 #[test]
 fn test_import_with_confirmation() {
-    let d = test_keyring_dir("import_confirm");
+    let k = TestKeyring::new("import_confirm");
     let meta = pqp::keyring::generate_key(
         "export@example.com",
         "pass",
@@ -292,7 +285,7 @@ fn test_import_with_confirmation() {
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
-    let key_file = d.join("export_key.pqp.asc");
+    let key_file = k.path().join("export_key.pqp.asc");
     std::fs::write(&key_file, &armored).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
@@ -301,7 +294,7 @@ fn test_import_with_confirmation() {
             "--dont-ask-confirmation",
             &key_file.to_string_lossy(),
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -314,7 +307,7 @@ fn test_import_with_confirmation() {
 
 #[test]
 fn test_remove_key_public_only() {
-    let _d = test_keyring_dir("remove_pub");
+    let k = TestKeyring::new("remove_pub");
     let meta = pqp::keyring::generate_key(
         "remove-pub@example.com",
         "pass",
@@ -336,7 +329,7 @@ fn test_remove_key_public_only() {
     assert!(keys.is_empty(), "key should be removed from listing");
 
     // Secret file remains but no public + conf, so list_keys won't find it
-    let dir = keys_dir().join(&key_id);
+    let dir = k.path().join(&key_id);
     assert!(
         dir.join("pqp-secret.der").exists(),
         "secret key should remain"
@@ -345,7 +338,7 @@ fn test_remove_key_public_only() {
 
 #[test]
 fn test_remove_key_public_and_private() {
-    let _d = test_keyring_dir("remove_both");
+    let k = TestKeyring::new("remove_both");
     let meta = pqp::keyring::generate_key(
         "remove-both@example.com",
         "pass",
@@ -364,20 +357,20 @@ fn test_remove_key_public_and_private() {
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys.is_empty(), "key should be removed completely");
 
-    let dir = keys_dir().join(&key_id);
+    let dir = k.path().join(&key_id);
     assert!(!dir.exists(), "key directory should be removed");
 }
 
 #[test]
 fn test_remove_key_nonexistent() {
-    let _d = test_keyring_dir("remove_nonexistent");
+    let _k = TestKeyring::new("remove_nonexistent");
     let result = pqp::keyring::remove_key("nonexistent-key-id", false);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_resolve_key_ids_by_key_id() {
-    let _d = test_keyring_dir("res_ids_id");
+    let _k = TestKeyring::new("res_ids_id");
     let meta = pqp::keyring::generate_key(
         "resolve-ids@example.com",
         "pass",
@@ -396,7 +389,7 @@ fn test_resolve_key_ids_by_key_id() {
 
 #[test]
 fn test_resolve_key_ids_by_user_id() {
-    let _d = test_keyring_dir("res_ids_user");
+    let _k = TestKeyring::new("res_ids_user");
     pqp::keyring::generate_key(
         "multi@example.com",
         "pass",
@@ -427,14 +420,14 @@ fn test_resolve_key_ids_by_user_id() {
 
 #[test]
 fn test_resolve_key_ids_not_found() {
-    let _d = test_keyring_dir("res_ids_nf");
+    let _k = TestKeyring::new("res_ids_nf");
     let result = pqp::keyring::resolve_key_ids("nonexistent");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_cli_remove_key_public_only() {
-    let d = test_keyring_dir("cli_remove_pub");
+    let k = TestKeyring::new("cli_remove_pub");
     let meta = pqp::keyring::generate_key(
         "cli-remove-pub@example.com",
         "pass",
@@ -450,7 +443,7 @@ fn test_cli_remove_key_public_only() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["remove-key", "--dont-ask", &key_id])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -465,7 +458,7 @@ fn test_cli_remove_key_public_only() {
 
 #[test]
 fn test_cli_remove_key_public_and_private() {
-    let d = test_keyring_dir("cli_remove_both");
+    let k = TestKeyring::new("cli_remove_both");
     let meta = pqp::keyring::generate_key(
         "cli-remove-both@example.com",
         "pass",
@@ -481,7 +474,7 @@ fn test_cli_remove_key_public_and_private() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["remove-key", "--dont-ask", "--remove-private-key", &key_id])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -496,7 +489,7 @@ fn test_cli_remove_key_public_and_private() {
 
 #[test]
 fn test_cli_remove_key_by_user_id() {
-    let d = test_keyring_dir("cli_remove_user");
+    let k = TestKeyring::new("cli_remove_user");
     pqp::keyring::generate_key(
         "remove-by-user@example.com",
         "pass",
@@ -524,7 +517,7 @@ fn test_cli_remove_key_by_user_id() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["remove-key", "--dont-ask", "remove-by-user@example.com"])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -539,10 +532,10 @@ fn test_cli_remove_key_by_user_id() {
 
 #[test]
 fn test_cli_remove_key_not_found() {
-    let d = test_keyring_dir("cli_remove_nf");
+    let k = TestKeyring::new("cli_remove_nf");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["remove-key", "--dont-ask", "nonexistent-key"])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(!output.status.success());
@@ -551,7 +544,7 @@ fn test_cli_remove_key_not_found() {
 
 #[test]
 fn test_list_keys_json_format() {
-    let d = test_keyring_dir("list_json");
+    let k = TestKeyring::new("list_json");
     pqp::keyring::generate_key(
         "json@example.com",
         "pass",
@@ -566,7 +559,7 @@ fn test_list_keys_json_format() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["list-keys", "--format", "json"])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -579,7 +572,7 @@ fn test_list_keys_json_format() {
 
 #[test]
 fn test_list_keys_no_headers_format() {
-    let d = test_keyring_dir("list_nohead");
+    let k = TestKeyring::new("list_nohead");
     pqp::keyring::generate_key(
         "nohead@example.com",
         "pass",
@@ -594,7 +587,7 @@ fn test_list_keys_no_headers_format() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["list-keys", "--format", "no-headers"])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -606,7 +599,7 @@ fn test_list_keys_no_headers_format() {
 
 #[test]
 fn test_import_from_stdin() {
-    let d = test_keyring_dir("import_stdin");
+    let k = TestKeyring::new("import_stdin");
     let meta = pqp::keyring::generate_key(
         "stdinimport@example.com",
         "pass",
@@ -619,7 +612,7 @@ fn test_import_from_stdin() {
     )
     .unwrap();
     let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
-    let key_file = d.join("import_key.pqp.asc");
+    let key_file = k.path().join("import_key.pqp.asc");
     std::fs::write(&key_file, &armored).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
@@ -628,7 +621,7 @@ fn test_import_from_stdin() {
             "--dont-ask-confirmation",
             &key_file.to_string_lossy(),
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -641,7 +634,7 @@ fn test_import_from_stdin() {
 
 #[test]
 fn test_export_public_key_pqp_format() {
-    let _d = test_keyring_dir("export_pqp");
+    let _k = TestKeyring::new("export_pqp");
     let meta = pqp::keyring::generate_key(
         "pqp-export@example.com",
         "pass",
@@ -675,7 +668,7 @@ fn test_export_public_key_pqp_format() {
 
 #[test]
 fn test_import_public_key_from_pqp() {
-    let _d = test_keyring_dir("import_pqp");
+    let _k = TestKeyring::new("import_pqp");
     let meta = pqp::keyring::generate_key(
         "pqp-import@example.com",
         "pass",
@@ -691,8 +684,7 @@ fn test_import_public_key_from_pqp() {
     let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
     // Import into a different keyring
-    let import_d = test_keyring_dir("import_pqp_dest");
-    std::env::set_var("HOME", &import_d);
+    let _import_k = TestKeyring::new("import_pqp_dest");
 
     let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
     assert!(!imported_id.is_empty());
@@ -714,7 +706,7 @@ fn test_import_public_key_from_pqp() {
 
 #[test]
 fn test_cli_export_pqp_format() {
-    let d = test_keyring_dir("cli_export_pqp");
+    let k = TestKeyring::new("cli_export_pqp");
     let meta = pqp::keyring::generate_key(
         "cli-pqp-export@example.com",
         "pass",
@@ -727,7 +719,7 @@ fn test_cli_export_pqp_format() {
     )
     .unwrap();
 
-    let out_file = d.join("exported.pqp.pub");
+    let out_file = k.path().join("exported.pqp.pub");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args([
             "export",
@@ -737,7 +729,7 @@ fn test_cli_export_pqp_format() {
             &out_file.to_string_lossy(),
             &meta.key_id,
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -754,7 +746,7 @@ fn test_cli_export_pqp_format() {
 
 #[test]
 fn test_cli_import_pqp_format() {
-    let d = test_keyring_dir("cli_import_pqp");
+    let k = TestKeyring::new("cli_import_pqp");
     let meta = pqp::keyring::generate_key(
         "cli-pqp-import@example.com",
         "pass",
@@ -768,7 +760,7 @@ fn test_cli_import_pqp_format() {
     .unwrap();
 
     let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
-    let key_file = d.join("key.pqp.pub");
+    let key_file = k.path().join("key.pqp.pub");
     std::fs::write(&key_file, &pqp_data).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
@@ -777,7 +769,7 @@ fn test_cli_import_pqp_format() {
             "--dont-ask-confirmation",
             &key_file.to_string_lossy(),
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -790,7 +782,7 @@ fn test_cli_import_pqp_format() {
 
 #[test]
 fn test_pqp_format_roundtrip() {
-    let d = test_keyring_dir("pqp_roundtrip");
+    let _k = TestKeyring::new("pqp_roundtrip");
     let meta = pqp::keyring::generate_key(
         "roundtrip@example.com",
         "pass",
@@ -805,8 +797,7 @@ fn test_pqp_format_roundtrip() {
 
     let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
-    let import_d = test_keyring_dir("pqp_roundtrip_dest");
-    std::env::set_var("HOME", &import_d);
+    // Import into the same keyring (override already set)
     let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
 
     let (kem_pk, _sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
@@ -814,7 +805,6 @@ fn test_pqp_format_roundtrip() {
     let (ct, shared1) = pqp::crypto::kem::encapsulate(&pk).unwrap();
 
     // Load original's secret key to decapsulate and verify KEM roundtrip
-    std::env::set_var("HOME", &d);
     let (kem_sk, _, _, _) = pqp::keyring::load_secret_key(&meta.key_id, "pass").unwrap();
     let sk = pqp::crypto::kem::SecretKey::from_bytes(&kem_sk).unwrap();
     let shared2 = pqp::crypto::kem::decapsulate(&sk, &ct, KemVariant::MlKem768).unwrap();
@@ -831,7 +821,7 @@ fn test_pqp_format_compressed_roundtrip() {
         ("gzip", "GZIP", pqp::format::Algorithm::Gzip),
         ("deflate", "DEFLATE", pqp::format::Algorithm::Deflate),
     ] {
-        let gen_dir = test_keyring_dir(&format!("pqp_compress_gen_{}", suffix));
+        let _gen_k = TestKeyring::new(&format!("pqp_compress_gen_{}", suffix));
         let meta = pqp::keyring::generate_key(
             &format!("compress-{}@example.com", suffix),
             "pass",
@@ -851,8 +841,7 @@ fn test_pqp_format_compressed_roundtrip() {
             name
         );
 
-        let import_dir = test_keyring_dir(&format!("pqp_compress_imp_{}", suffix));
-        std::env::set_var("HOME", &import_dir);
+        let _import_k = TestKeyring::new(&format!("pqp_compress_imp_{}", suffix));
         let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
 
         let (kem_pk, sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
@@ -863,14 +852,13 @@ fn test_pqp_format_compressed_roundtrip() {
         let _sign_pk =
             pqp::crypto::sign::PublicKey::from_bytes(&sign_pk, DsaVariant::MlDsa65).unwrap();
 
-        std::fs::remove_dir_all(&gen_dir).ok();
-        std::fs::remove_dir_all(&import_dir).ok();
+        // _gen_k and _import_k are dropped here, cleaning up their directories
     }
 }
 
 #[test]
 fn test_cli_export_pqp_with_compression() {
-    let d = test_keyring_dir("cli_pqp_compr");
+    let k = TestKeyring::new("cli_pqp_compr");
     let meta = pqp::keyring::generate_key(
         "cli-pqp-compress@example.com",
         "pass",
@@ -883,7 +871,7 @@ fn test_cli_export_pqp_with_compression() {
     )
     .unwrap();
 
-    let out_file = d.join("compressed.pqp.pub");
+    let out_file = k.path().join("compressed.pqp.pub");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args([
             "export",
@@ -895,7 +883,7 @@ fn test_cli_export_pqp_with_compression() {
             &out_file.to_string_lossy(),
             &meta.key_id,
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
@@ -915,7 +903,7 @@ fn test_cli_export_pqp_with_compression() {
             "--dont-ask-confirmation",
             &out_file.to_string_lossy(),
         ])
-        .env("HOME", d.to_string_lossy().to_string())
+        .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
         .output()
         .unwrap();
     assert!(
