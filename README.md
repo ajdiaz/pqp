@@ -256,4 +256,4 @@ cargo fmt --check
 
 ## 📜 License
 
-MIT OR Apache-2.0
+MIT — see [COPYING](COPYING) for details.
