@@ -197,6 +197,20 @@ pub enum Commands {
         )]
         remove_private_key: bool,
     },
+    /// Remove all public keys from the keyring.
+    #[command(name = "purge-keys")]
+    PurgeKeys {
+        #[arg(
+            long = "no-ask-confirmation",
+            help = "Skip confirmation prompt before removing keys"
+        )]
+        no_ask_confirmation: bool,
+        #[arg(
+            long = "remove-private-keys",
+            help = "Also remove private keys if they exist"
+        )]
+        remove_private_keys: bool,
+    },
     /// Import a public key (armored).
     #[command(name = "import")]
     Import {

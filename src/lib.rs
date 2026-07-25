@@ -19,6 +19,7 @@
 //! | [`export`](cli::Commands::Export) | Export a public key (armored) |
 //! | [`import`](cli::Commands::Import) | Import a public key (armored) |
 //! | [`remove-key`](cli::Commands::RemoveKey) | Remove a public (and optionally private) key |
+//! | [`purge-keys`](cli::Commands::PurgeKeys) | Remove all keys from the keyring |
 //!
 //! # Global configuration file
 //!
@@ -165,6 +166,14 @@
 //! | `key_id` | Key ID or user ID to remove |
 //! | `--dont-ask` | Skip confirmation prompt before removing |
 //! | `--remove-private-key` | Also remove the private key if it exists |
+//!
+//! ### `purge-keys`
+//! `pqp purge-keys [--no-ask-confirmation] [--remove-private-keys]`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `--no-ask-confirmation` | Skip the confirmation prompt before removing keys |
+//! | `--remove-private-keys` | Also remove private keys if they exist |
 //!
 //! # Key storage
 //!

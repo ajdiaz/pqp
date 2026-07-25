@@ -108,6 +108,9 @@ pqp import alice.pqp.asc                             # Auto-detects format
 pqp import key.pqp.pub                               # PQP format auto-detected
 pqp import --url https://keys.example.com/bob.pqp.asc
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
+pqp purge-keys                                                 # Remove all public keys (asks confirmation)
+pqp purge-keys --no-ask-confirmation                           # Remove all public keys (no prompt)
+pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys including private
 ```
 
 ---
@@ -125,6 +128,7 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 | `export` | Export a public key (PQP format by default) |
 | `import` | Import a public key (armored or PQP) |
 | `remove-key` | Remove a public (and optionally private) key |
+| `purge-keys` | Remove all keys from the keyring |
 
 ### 🌐 Global flags
 
@@ -224,6 +228,8 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 **import:** `[infile]` · `--url <url>` · `--dont-ask-confirmation`
 
 **remove-key:** `<key-id>` · `--dont-ask` · `--remove-private-key`
+
+**purge-keys:** `--no-ask-confirmation` · `--remove-private-keys`
 
 ---
 

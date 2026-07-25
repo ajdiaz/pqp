@@ -329,9 +329,20 @@ ASCII-armored PEM-style (\(oq\-\-\-\-\-BEGIN PQP PUBLIC KEY...\(cq).
 File extension: \fI.pqp.asc\fR.  Widest compatibility.
 .RE
 .TP
-\fB\-\-compress\fR \fI\,ALGO\/\fR
+\fB\-o\fR, \fB\-\-output\fR \fI\,FILE\/\fR
 Compression for PQP format.  Ignored for armor.  Default: \fBzstd\fR.
 Same values as encrypt's \fB\-\-compress\fR.
+
+.SS purge\-keys
+Remove all keys from the keyring.
+.PP
+.B pqp purge\-keys [\fI\,OPTIONS\/\fR]
+.TP
+\fB\-\-no\-ask\-confirmation\fR
+Skip the confirmation prompt before removing keys.
+.TP
+\fB\-\-remove\-private\-keys\fR
+Also remove private keys if they exist.
 
 .SS import
 Import a public key from an armored file, PQP format, or URL.

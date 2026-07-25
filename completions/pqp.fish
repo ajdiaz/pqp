@@ -77,6 +77,12 @@ complete -c pqp -f -n "__fish_seen_subcommand_from remove-key" -l remove-private
 complete -c pqp -f -n "__fish_seen_subcommand_from remove-key" -l help -d "Print help"
 complete -c pqp -f -n "__fish_seen_subcommand_from remove-key" -a "(__pqp_complete_keys)" -d "Key ID or user ID"
 
+# --- purge-keys ---
+complete -c pqp -f -n "__fish_use_subcommand" -a purge-keys -d "Remove all keys from the keyring"
+complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l no-ask-confirmation -d "Skip confirmation prompt"
+complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l remove-private-keys -d "Also remove private keys"
+complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l help -d "Print help"
+
 # --- import ---
 complete -c pqp -f -n "__fish_use_subcommand" -a import -d "Import a public key"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l url -d "URL to fetch the armored key from" -r

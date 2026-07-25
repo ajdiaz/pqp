@@ -16,7 +16,8 @@ _pqp() {
         'sign:Sign a file with a private key'
         'verify:Verify a signature'
         'export:Export a public key (armored or PQP format)'
-        'remove-key:Remove a public key from the keyring'
+        'remove-key:Remove a public key from the keyring' \
+'purge-keys:Remove all keys from the keyring'
         'import:Import a public key'
     )
 
@@ -58,6 +59,9 @@ _pqp() {
             ;;
         remove-key)
             _pqp_remove_key
+            ;;
+        purge-keys)
+            _pqp_purge_keys
             ;;
         import)
             _pqp_import
@@ -131,6 +135,12 @@ _pqp_remove_key() {
         '--dont-ask[Skip confirmation prompt before removing]' \
         '--remove-private-key[Also remove the private key if it exists]' \
         ':key ID or user ID:'
+}
+
+_pqp_purge_keys() {
+    _arguments \
+        '--no-ask-confirmation[Skip confirmation prompt before removing keys]' \
+        '--remove-private-keys[Also remove private keys if they exist]'
 }
 
 _pqp_import() {

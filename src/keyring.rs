@@ -717,6 +717,19 @@ pub fn remove_key(key_id: &str, remove_private: bool) -> Result<()> {
     Ok(())
 }
 
+/// Remove all keys from the keyring.
+///
+/// Iterates all keys and removes each one. If `remove_private` is `true`,
+/// also removes private keys. Returns the number of keys removed.
+pub fn purge_keys(remove_private: bool) -> Result<usize> {
+    let keys = list_keys()?;
+    let count = keys.len();
+    for key in &keys {
+        remove_key(&key.key_id, remove_private)?;
+    }
+    Ok(count)
+}
+
 /// Check whether a key is expired based on its stored metadata.
 ///
 /// Returns `None` if the metadata cannot be read or has no valid

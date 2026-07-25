@@ -10,7 +10,7 @@ _pqp() {
     local global_opts='-n --dry-run --keyring-path --help -h'
 
     # Subcommands
-    local commands='gen-key list-keys encrypt decrypt sign verify export remove-key import'
+    local commands='gen-key list-keys encrypt decrypt sign verify export remove-key purge-keys import'
 
     # Subcommand dispatch
     if [[ $cword -eq 1 ]]; then
@@ -169,6 +169,16 @@ _pqp() {
                     return
                     ;;
             esac
+            ;;
+        purge-keys)
+            case "$prev" in
+                *)
+                    COMPREPLY=($(compgen -W '--no-ask-confirmation --remove-private-keys --help -h' -- "$cur"))
+                    return
+                    ;;
+            esac
+            ;;
+    esac
             ;;
         import)
             case "$prev" in

@@ -749,6 +749,55 @@ fn main() -> Result<()> {
                 println!("Removed {} key {}/{}", removed, kid, meta.user_id);
             }
         }
+        Commands::PurgeKeys {
+            no_ask_confirmation,
+            remove_private_keys,
+        } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would purge-keys: no action taken");
+                return Ok(());
+            }
+            let keys = keyring::list_keys()?;
+            if keys.is_empty() {
+                println!("No keys in keyring.");
+                return Ok(());
+            }
+            if !no_ask_confirmation {
+                let count = keys.len();
+                let what = if remove_private_keys {
+                    "public and private"
+                } else {
+                    "public"
+                };
+                let prompt = format!(
+                    "Remove all {} keys ({} key{}) from the keyring? [y/N] ",
+                    what,
+                    count,
+                    if count == 1 { "" } else { "s" },
+                );
+                eprint!("{}", prompt);
+                std::io::stderr().flush()?;
+                let mut answer = String::new();
+                std::io::stdin().read_line(&mut answer)?;
+                let answer = answer.trim().to_lowercase();
+                if answer != "y" && answer != "yes" {
+                    println!("Purge cancelled.");
+                    return Ok(());
+                }
+            }
+            let removed = keyring::purge_keys(remove_private_keys)?;
+            let what = if remove_private_keys {
+                "public and private"
+            } else {
+                "public"
+            };
+            println!(
+                "Purged {} key{} ({}) from keyring.",
+                removed,
+                if removed == 1 { "" } else { "s" },
+                what,
+            );
+        }
         Commands::Export {
             key_id,
             output,
