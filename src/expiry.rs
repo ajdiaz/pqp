@@ -113,6 +113,9 @@ fn date_to_days(year: u64, month: u64, day: u64) -> u64 {
 
 /// Check whether an ISO 8601 expiration timestamp is in the past.
 pub fn is_expired(expiration_date: &str) -> bool {
+    if expiration_date == "expired" {
+        return true;
+    }
     let now = now_secs();
     let exp_secs = iso8601_to_secs(expiration_date);
     match exp_secs {

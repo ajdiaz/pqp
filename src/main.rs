@@ -331,7 +331,11 @@ fn main() -> Result<()> {
                             };
                             let expired = pqp::expiry::is_expired(&key.expiration_date);
                             let status = if expired { "expired" } else { "valid" };
-                            let expires_display = &key.expiration_date[..10];
+                            let expires_display = if key.expiration_date.len() > 10 {
+                                &key.expiration_date[..10]
+                            } else {
+                                &key.expiration_date
+                            };
                             println!(
                                 "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
                                 key.key_id,
