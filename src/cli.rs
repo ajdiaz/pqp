@@ -173,8 +173,8 @@ pub enum Commands {
         output: Option<String>,
         #[arg(
             long = "format",
-            default_value = "armor",
-            help = "Output format: armor (-----BEGIN/END-----) or pqp (AlgorithmList::Payload)"
+            default_value = "pqp",
+            help = "Output format: pqp (AlgorithmList::Payload) or armor (-----BEGIN/END-----)"
         )]
         format_: String,
         #[arg(

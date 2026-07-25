@@ -101,8 +101,8 @@ pqp verify contract.pdf.pqp.sig contract.pdf
 
 ```bash
 pqp list-keys --format json
-pqp export a1b2c3d4e5f6a7b8 -o alice.pqp.asc
-pqp export --format pqp a1b2c3d4e5f6a7b8           # Self-describing PQP format (ZSTD by default)
+pqp export a1b2c3d4e5f6a7b8                        # PQP format (default, ZSTD+Base64)
+pqp export --format armor a1b2c3...                 # ASCII-armored PEM-style
 pqp export --format pqp --compress none a1b2c3...   # PQP without compression
 pqp import alice.pqp.asc                             # Auto-detects format
 pqp import key.pqp.pub                               # PQP format auto-detected
@@ -122,8 +122,8 @@ pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 | `decrypt` | Decrypt a file |
 | `sign` | Sign a file with a private key |
 | `verify` | Verify a signature |
-| `export` | Export a public key (armored) |
-| `import` | Import a public key (armored) |
+| `export` | Export a public key (PQP format by default) |
+| `import` | Import a public key (armored or PQP) |
 | `remove-key` | Remove a public (and optionally private) key |
 
 ### 🌐 Global flags
@@ -165,7 +165,7 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | `table` human-friendly, `no-headers` for scripts, `json` for programs |
 | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd = best speed/ratio, lzma = best ratio/slowest, none = raw |
-| `[export]` | `format` | `armor`, `pqp` | `armor` | armor = universal pasteable, pqp = self-describing & compact |
+| `[export]` | `format` | `armor`, `pqp` | `pqp` | pqp = self-describing & compact, armor = universal pasteable |
 | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | Only for PQP format; same trade-offs as encrypt |
 | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location (XDG / PQP_HOME) |
 
@@ -219,7 +219,7 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 
 **verify:** `<signature>` · `[infile]`
 
-**export:** `<key-id>` · `-o <outfile>` · `--format <armor|pqp>` · `--compress <algo>`
+**export:** `<key-id>` · `-o <outfile>` · `--format <pqp|armor>` · `--compress <algo>`
 
 **import:** `[infile]` · `--url <url>` · `--dont-ask-confirmation`
 
@@ -242,6 +242,8 @@ AlgorithmList::EncodedPayload
 | Encrypted | `ML-KEM+XChaCha20-Poly1305+ZSTD+BASE64` | `.pqp.enc` |
 | Signature | `ML-DSA+SHA3-256+BASE64` | `.pqp.sig` |
 | Public Key (armor) | `-----BEGIN PQP PUBLIC KEY-----` | `.pqp.asc` |
+
+| Public Key (PQP) | `ML-KEM-768+ML-DSA-65+ZSTD+BASE64::<payload>` | `.pqp.pub` |
 | Public Key (PQP) | `ML-KEM-768+ML-DSA-65+ZSTD+BASE64` | `.pqp.pub` |
 
 ### 🔐 Encrypted file layout

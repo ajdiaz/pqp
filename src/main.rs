@@ -756,7 +756,7 @@ fn main() -> Result<()> {
                 return Ok(());
             }
             let cmd_cfg = config::section(&cfg, "export");
-            format_ = config::apply_str(&format_, cmd_cfg, "format", "armor");
+            format_ = config::apply_str(&format_, cmd_cfg, "format", "pqp");
             compress = config::apply_str(&compress, cmd_cfg, "compress", "zstd");
             let resolved_id = keyring::resolve_key_id(&key_id)?;
             match format_.as_str() {

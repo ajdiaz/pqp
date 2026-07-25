@@ -246,19 +246,19 @@ compress = "zstd"
 # Output format for exported public keys.
 #
 # Possible values:
-#   "armor"        — ASCII-armored PEM-style format [default].
-#                    -----BEGIN PQP PUBLIC KEY <key-id>-----
-#                    Widest compatibility. Easy to email or paste
-#                    into web forms. The de facto interchange format.
-#
-#   "pqp"          — Self-describing AlgorithmList::EncodedPayload.
+#   "pqp"          — Self-describing AlgorithmList::EncodedPayload [default].
 #                    Embeds KEM and DSA variant names in the
 #                    algorithm string (e.g.
 #                    ML-KEM-768+ML-DSA-65+ZSTD+BASE64::<payload>).
 #                    Fully self-contained — no sidecar metadata
 #                    needed for re-import. Slightly more compact
 #                    than armor but less human-readable.
-format = "armor"
+#
+#   "armor"        — ASCII-armored PEM-style format.
+#                    -----BEGIN PQP PUBLIC KEY <key-id>-----
+#                    Widest compatibility. Easy to email or paste
+#                    into web forms.
+format = "pqp"
 
 # Compression for PQP export format.
 # Only applies when format = "pqp". Ignored for armor format.

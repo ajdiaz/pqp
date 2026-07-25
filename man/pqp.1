@@ -315,18 +315,18 @@ Key ID or user ID to export.
 Output file path.
 .TP
 \fB\-\-format\fR \fI\,FORMAT\/\fR
-Output format.  Default: \fBarmor\fR.
+Output format.  Default: \fBpqp\fR.
 .RS
+.TP
+\fBpqp\fR
+Self-describing AlgorithmList::EncodedPayload format [default].
+(e.g. \fBML\-KEM\-768+ML\-DSA\-65+ZSTD+BASE64::<payload>\fR).
+File extension: \fI.pqp.pub\fR.  Embeds KEM and DSA variant names
+for interchange without sidecar metadata.
 .TP
 \fBarmor\fR
 ASCII-armored PEM-style (\(oq\-\-\-\-\-BEGIN PQP PUBLIC KEY...\(cq).
 File extension: \fI.pqp.asc\fR.  Widest compatibility.
-.TP
-\fBpqp\fR
-Self-describing AlgorithmList::EncodedPayload format
-(e.g. \fBML\-KEM\-768+ML\-DSA\-65+ZSTD+BASE64::<payload>\fR).
-File extension: \fI.pqp.pub\fR.  Embeds KEM and DSA variant names
-for interchange without sidecar metadata.
 .RE
 .TP
 \fB\-\-compress\fR \fI\,ALGO\/\fR

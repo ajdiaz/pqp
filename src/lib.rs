@@ -46,7 +46,7 @@
 //! | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 //! | `[list-keys]` | `format` | `table`, `no-headers`, `json` | `table` | table human, no-headers scripts, json programs |
 //! | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd best speed/ratio, lzma best ratio/slowest |
-//! | `[export]` | `format` | `armor`, `pqp` | `armor` | armor universal, pqp self-describing |
+//! | `[export]` | `format` | `armor`, `pqp` | `pqp` | pqp self-describing, armor universal pasteable |
 //! | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | only for PQP format |
 //! | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location |
 //!
@@ -140,7 +140,7 @@
 //! |---|---|
 //! | `key_id` | Key ID or user ID to export |
 //! | `-o`, `--output` | Output file path |
-//! | `--format` | Output format: `armor` (default, PEM-style), `pqp` (`AlgorithmList::EncodedPayload`) |
+//! | `--format` | Output format: `pqp` (default, `AlgorithmList::EncodedPayload`), `armor` (PEM-style) |
 //! | `--compress` | Compression for PQP format: `none`, `zstd` (default), `gzip`, `bzip2`, `lzma` |
 //!
 //! The PQP format (`--format pqp`) encodes the key as
