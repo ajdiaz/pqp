@@ -16,7 +16,6 @@ use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
-use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 fn read_passphrase(prompt: &str) -> Result<String> {
@@ -221,8 +220,8 @@ fn main() -> Result<()> {
                                     .metadata
                                     .iter()
                                     .map(|e| {
-                                        let k = serde_json::to_string(&e.key).unwrap_or_default();
-                                        let v = serde_json::to_string(&e.value).unwrap_or_default();
+                                        let k = pqp::util::json_escape_string(&e.key);
+                                        let v = pqp::util::json_escape_string(&e.value);
                                         format!("    {{ \"key\": {}, \"value\": {} }}", k, v)
                                     })
                                     .collect();
@@ -685,7 +684,7 @@ fn main() -> Result<()> {
             hasher.update(&orig_data);
             let computed_hash = hasher.finalize();
 
-            if stored_hash.ct_ne(computed_hash.as_slice()).into() {
+            if !pqp::util::constant_time_eq(stored_hash, computed_hash.as_slice()) {
                 return Err(anyhow::anyhow!("hash mismatch: file has been modified"));
             }
 

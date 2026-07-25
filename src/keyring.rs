@@ -128,13 +128,13 @@ fn pqp_dir() -> Result<PathBuf> {
     if let Ok(pqp_home) = std::env::var("PQP_HOME") {
         return Ok(PathBuf::from(pqp_home).join(".pqp"));
     }
-    let xdg = dirs::data_dir()
+    let xdg = crate::util::data_dir()
         .context("cannot determine XDG data directory")?
         .join("pqp");
     if xdg.exists() {
         return Ok(xdg);
     }
-    let home = dirs::home_dir().context("cannot determine home directory")?;
+    let home = crate::util::home_dir().context("cannot determine home directory")?;
     let legacy = home.join(".pqp");
     if legacy.exists() {
         return Ok(legacy);
@@ -730,7 +730,7 @@ fn generate_key_id() -> Result<String> {
     let mut buf = [0u8; 8];
     use rand::RngCore;
     rand::rngs::OsRng.fill_bytes(&mut buf);
-    Ok(hex::encode(buf))
+    Ok(crate::util::hex_encode(&buf))
 }
 
 fn generate_salt() -> Result<[u8; 16]> {

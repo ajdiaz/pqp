@@ -308,8 +308,7 @@ fn decode_raw(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
         }
         Algorithm::Ascii85 => {
             let s = std::str::from_utf8(data).context("ascii85 input is not valid UTF-8")?;
-            let bytes =
-                ascii85::decode(s).map_err(|e| anyhow::anyhow!("ascii85 decode failed: {}", e))?;
+            let bytes = crate::util::ascii85_decode(s)?;
             Ok(bytes)
         }
         _ => Err(anyhow::anyhow!(

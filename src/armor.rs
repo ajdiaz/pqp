@@ -178,13 +178,5 @@ fn base64_decode(data: &str) -> Result<Vec<u8>> {
 }
 
 fn ascii85_decode(data: &str) -> Result<Vec<u8>> {
-    let mut expanded = String::with_capacity(data.len());
-    for c in data.chars() {
-        if c == 'z' {
-            expanded.push_str("!!!!!");
-        } else {
-            expanded.push(c);
-        }
-    }
-    ascii85::decode(&expanded).map_err(|e| anyhow::anyhow!("ascii85 decode failed: {}", e))
+    crate::util::ascii85_decode(data)
 }

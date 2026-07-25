@@ -38,14 +38,14 @@ fn config_path() -> Result<PathBuf> {
         let path = PathBuf::from(pqp_home).join(".pqp").join("pqp.toml");
         return Ok(path);
     }
-    let xdg = dirs::config_dir()
+    let xdg = crate::util::config_dir()
         .context("cannot determine XDG config directory")?
         .join("pqp")
         .join("pqp.toml");
     if xdg.exists() {
         return Ok(xdg);
     }
-    let home = dirs::home_dir().context("cannot determine home directory")?;
+    let home = crate::util::home_dir().context("cannot determine home directory")?;
     let legacy = home.join(".pqp").join("pqp.toml");
     if legacy.exists() {
         return Ok(legacy);
