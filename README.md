@@ -40,6 +40,14 @@ pqp gen-key -u "alice@example.com"
 # Enter passphrase for new key:
 # Confirm passphrase:
 # Generated key pair: key-id=a1b2c3d4e5f6a7b8
+#   user-id: alice@example.com
+#   created: 2026-07-28T12:00:00Z
+#   kem: ML-KEM-768
+#   dsa: ML-DSA-65
+#   encoding: BASE64
+#   compress: none
+#   expires: 2031-07-27T12:00:00Z
+#   fingerprint: 3a7bd3e25f46a09e8e4f5e2c7b1d8a3c9f0e2d4b6a8c1e3f5a7b9d0c2e4f6a8b
 ```
 
 Custom variants, no-passphrase, and expiration:
@@ -100,6 +108,10 @@ pqp verify contract.pdf.pqp.sig contract.pdf
 ### List, export, import, remove keys
 
 ```bash
+pqp list-keys
+# Key ID           User ID             Created               Type   KEM       Sign       Compress  Expires    Status   Fingerprint
+# --------------------------------------------------------------------------------------------------------------------------
+# a1b2c3d4e5f6a7b8 alice@example.com   2026-07-28T12:00:00Z  pub+sec ML-KEM-768 ML-DSA-65 none     2031-07-27 valid      3a7bd3e25f46a09e...
 pqp list-keys --format json
 pqp export a1b2c3d4e5f6a7b8                        # PQP format (default, ZSTD+Base64)
 pqp export --format armor a1b2c3...                 # ASCII-armored PEM-style

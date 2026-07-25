@@ -8,6 +8,13 @@
 //!
 //! `pqp` is a CLI tool with the following commands:
 //!
+//! ## Key fingerprint
+//!
+//! Every generated key has a `fingerprint`: `hex(SHA3-256(kem_pk || sign_pk))`,
+//! a 64-character hex string that uniquely identifies the key material. It is
+//! stored in `pqp.conf`, included as a `Fingerprint` header in armor exports,
+//! embedded in PQP format metadata, and displayed in `list-keys` output.
+//!
 //! | Command | Description |
 //! |---|---|
 //! | [`gen-key`](cli::Commands::GenKey) | Generate a PQ key pair (Kyber + Dilithium) |

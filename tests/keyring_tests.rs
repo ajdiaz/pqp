@@ -60,6 +60,15 @@ fn test_generate_and_export() {
     .unwrap();
     assert_eq!(meta.user_id, "test@example.com");
     assert!(!meta.key_id.is_empty());
+    assert!(
+        !meta.fingerprint.is_empty(),
+        "fingerprint should be generated for new keys"
+    );
+    assert_eq!(
+        meta.fingerprint.len(),
+        64,
+        "fingerprint should be 64 hex chars (SHA3-256)"
+    );
 
     // Verify key exists on disk at the overridden keyring path
     let key_dir = k.path().join(&meta.key_id);
@@ -762,6 +771,27 @@ fn test_import_public_key_from_pqp() {
     assert!(!imported_id.is_empty());
     assert_ne!(imported_id, meta.key_id, "imported key should get a new ID");
 
+    // Verify metadata was preserved
+    let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
+    assert_eq!(
+        imported_meta.user_id, meta.user_id,
+        "user_id should be preserved"
+    );
+    assert_eq!(
+        imported_meta.expiration_date, meta.expiration_date,
+        "expiration_date should be preserved"
+    );
+    assert_eq!(imported_meta.kem_algorithm, meta.kem_algorithm);
+    assert_eq!(imported_meta.sign_algorithm, meta.sign_algorithm);
+    assert_eq!(
+        imported_meta.fingerprint, meta.fingerprint,
+        "fingerprint should be preserved across PQP export-import"
+    );
+    assert!(
+        !imported_meta.fingerprint.is_empty(),
+        "fingerprint should not be empty"
+    );
+
     // Verify the imported key works
     let (kem_pk, sign_pk, kem_alg, sign_alg) = pqp::keyring::load_public_key(&imported_id).unwrap();
     assert!(!kem_pk.is_empty());
@@ -774,6 +804,54 @@ fn test_import_public_key_from_pqp() {
     assert!(!ct.is_empty());
 
     let _sign_pk = pqp::crypto::sign::PublicKey::from_bytes(&sign_pk, DsaVariant::MlDsa65).unwrap();
+}
+
+#[test]
+fn test_import_public_key_armor_preserves_metadata() {
+    let _k = TestKeyring::new("import_armor_meta");
+    let meta = pqp::keyring::generate_key(
+        "armor-preserve@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
+    assert!(armored.contains("User-ID: armor-preserve@example.com"));
+    assert!(armored.contains(&meta.expiration_date));
+    assert!(armored.contains("KEM: ML-KEM-768"));
+    assert!(armored.contains("DSA: ML-DSA-65"));
+
+    // Import into a different keyring
+    let _import_k = TestKeyring::new("import_armor_meta_dest");
+    let imported_id = pqp::keyring::import_public_key(&armored).unwrap();
+
+    let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
+    assert_eq!(
+        imported_meta.user_id, meta.user_id,
+        "armor import should preserve user_id"
+    );
+    assert_eq!(
+        imported_meta.expiration_date, meta.expiration_date,
+        "armor import should preserve expiration_date"
+    );
+    assert_eq!(imported_meta.kem_algorithm, meta.kem_algorithm);
+    assert_eq!(imported_meta.sign_algorithm, meta.sign_algorithm);
+    assert_eq!(imported_meta.created_at, meta.created_at);
+    assert!(armored.contains("Fingerprint:"));
+    assert!(armored.contains(&meta.fingerprint));
+    assert_eq!(
+        imported_meta.fingerprint, meta.fingerprint,
+        "fingerprint should be preserved across armor export-import"
+    );
 }
 
 #[test]

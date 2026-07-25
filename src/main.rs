@@ -186,6 +186,7 @@ fn main() -> Result<()> {
             println!("  encoding: {}", meta.encoding_algorithm);
             println!("  compress: {}", meta.compress_algorithm);
             println!("  expires: {}", meta.expiration_date);
+            println!("  fingerprint: {}", meta.fingerprint);
             for entry in &meta.metadata {
                 println!("  {}: {}", entry.key, entry.value);
             }
@@ -239,7 +240,8 @@ fn main() -> Result<()> {
     "sign_algorithm": "{}",
     "compress_algorithm": "{}",
     "expiration_date": "{}",
-    "expired": {}
+    "expired": {},
+    "fingerprint": "{}"
   {} }}"#,
                                 key.key_id,
                                 key.user_id,
@@ -252,6 +254,7 @@ fn main() -> Result<()> {
                                 key.compress_algorithm,
                                 key.expiration_date,
                                 expired,
+                                key.fingerprint,
                                 meta_json,
                             ));
                         }
@@ -269,7 +272,7 @@ fn main() -> Result<()> {
                             let expired = pqp::expiry::is_expired(&key.expiration_date);
                             let status = if expired { "expired" } else { "valid" };
                             println!(
-                                "{} {} {} {} {} {} {} {} {}",
+                                "{} {} {} {} {} {} {} {} {} {}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
@@ -279,6 +282,7 @@ fn main() -> Result<()> {
                                 key.compress_algorithm,
                                 key.expiration_date,
                                 status,
+                                key.fingerprint,
                             );
                         }
                     }
@@ -290,6 +294,12 @@ fn main() -> Result<()> {
                             .max()
                             .unwrap_or(20)
                             .max(8);
+                        let fp_width = 16usize.max(
+                            keys.iter()
+                                .map(|k| k.fingerprint.len().min(16))
+                                .max()
+                                .unwrap_or(0),
+                        );
                         let total = 16
                             + 1
                             + uid_width
@@ -306,9 +316,11 @@ fn main() -> Result<()> {
                             + 1
                             + 10
                             + 1
-                            + 10;
+                            + 10
+                            + 1
+                            + fp_width;
                         println!(
-                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
+                            "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10} {:<fp_w$}",
                             "Key ID",
                             "User ID",
                             "Created",
@@ -318,7 +330,9 @@ fn main() -> Result<()> {
                             "Compress",
                             "Expires",
                             "Status",
+                            "Fingerprint",
                             uid_w = uid_width,
+                            fp_w = fp_width,
                         );
                         println!("{}", "-".repeat(total));
                         for key in &keys {
@@ -336,8 +350,13 @@ fn main() -> Result<()> {
                             } else {
                                 &key.expiration_date
                             };
+                            let fp_display = if key.fingerprint.len() > 16 {
+                                &key.fingerprint[..16]
+                            } else {
+                                &key.fingerprint
+                            };
                             println!(
-                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10}",
+                                "{:<16} {:<uid_w$} {:<26} {:<8} {:<14} {:<14} {:<10} {:<10} {:<10} {:<fp_w$}",
                                 key.key_id,
                                 key.user_id,
                                 key.created_at,
@@ -347,7 +366,9 @@ fn main() -> Result<()> {
                                 key.compress_algorithm,
                                 expires_display,
                                 status,
+                                fp_display,
                                 uid_w = uid_width,
+                                fp_w = fp_width,
                             );
                         }
                     }

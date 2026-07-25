@@ -68,6 +68,11 @@ pub struct KeyMetadata {
     pub argon2_time: u32,
     #[serde(default = "default_argon2_par")]
     pub argon2_par: u32,
+    /// SHA3-256 fingerprint of the public key material, hex-encoded.
+    /// Computed as `hex(SHA3-256(kem_pk || sign_pk))`. Empty for keys
+    /// generated before this field was added.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 fn default_encoding() -> String {
@@ -118,6 +123,8 @@ pub struct KeyInfo {
     pub argon2_time: u32,
     #[serde(default = "default_argon2_par")]
     pub argon2_par: u32,
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 /// XDG data directory for pqp (`~/.local/share/pqp/`), with
@@ -291,6 +298,7 @@ pub fn list_keys() -> Result<Vec<KeyInfo>> {
                 argon2_mem: meta.argon2_mem,
                 argon2_time: meta.argon2_time,
                 argon2_par: meta.argon2_par,
+                fingerprint: meta.fingerprint,
             });
         }
     }
@@ -321,6 +329,17 @@ pub fn generate_key(
     let key_id = generate_key_id()?;
     let now = timestamp_iso8601();
 
+    let public_bytes = [
+        keypair.kem_public.as_bytes(),
+        keypair.sign_public.as_bytes(),
+    ]
+    .concat();
+
+    use sha3::{Digest, Sha3_256};
+    let mut hasher = Sha3_256::new();
+    hasher.update(&public_bytes);
+    let fingerprint = crate::util::hex_encode(&hasher.finalize());
+
     let meta = KeyMetadata {
         key_id: key_id.clone(),
         created_at: now,
@@ -335,16 +354,12 @@ pub fn generate_key(
         argon2_mem,
         argon2_time,
         argon2_par,
+        fingerprint,
     };
 
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory")?;
 
-    let public_bytes = [
-        keypair.kem_public.as_bytes(),
-        keypair.sign_public.as_bytes(),
-    ]
-    .concat();
     std::fs::write(dir.join("pqp-public.der"), &public_bytes).context("writing public key")?;
 
     let secret_bytes = [
@@ -451,6 +466,9 @@ pub fn load_secret_key(
 }
 
 /// Export a public key as an ASCII-armored string, using the key's preferred encoding.
+///
+/// The armor includes system metadata headers (User-ID, Expiration-Date, Created, KEM,
+/// DSA, Compress, Encoding, Argon2-*) so import can restore the original key metadata.
 pub fn export_public_key(key_id: &str) -> Result<String> {
     let meta = read_metadata(key_id)?;
     let encoding = Encoding::parse(&meta.encoding_algorithm)
@@ -461,12 +479,86 @@ pub fn export_public_key(key_id: &str) -> Result<String> {
         .context(format!("reading public key for {}", key_id))?;
 
     let marker = format!("PQP PUBLIC KEY {}", key_id);
-    let meta_pairs: Vec<(String, String)> = meta
-        .metadata
-        .iter()
-        .map(|e| (e.key.clone(), e.value.clone()))
-        .collect();
+
+    // System metadata headers first, then user-defined metadata
+    let mut meta_pairs: Vec<(String, String)> = vec![
+        ("User-ID".into(), meta.user_id),
+        ("Created".into(), meta.created_at),
+        ("Expiration-Date".into(), meta.expiration_date),
+        ("KEM".into(), meta.kem_algorithm),
+        ("DSA".into(), meta.sign_algorithm),
+        ("Compress".into(), meta.compress_algorithm),
+        ("Encoding".into(), meta.encoding_algorithm),
+        ("Argon2-Mem".into(), meta.argon2_mem.to_string()),
+        ("Argon2-Time".into(), meta.argon2_time.to_string()),
+        ("Argon2-Par".into(), meta.argon2_par.to_string()),
+        ("Fingerprint".into(), meta.fingerprint),
+    ];
+    for entry in &meta.metadata {
+        meta_pairs.push((entry.key.clone(), entry.value.clone()));
+    }
     armor::armor(&public_bytes, &marker, &encoding, &meta_pairs)
+}
+
+/// Pack public key bytes with metadata into a payload for PQP format.
+///
+/// Format: `b"PQPM"` + 4-byte BE TOML length + TOML metadata + key bytes.
+fn pack_pqp_payload(meta: &KeyMetadata, key_bytes: &[u8]) -> Result<Vec<u8>> {
+    let meta_toml = toml::to_string_pretty(meta)?;
+    let meta_bytes = meta_toml.as_bytes();
+    let len = meta_bytes.len() as u32;
+    let mut payload = Vec::with_capacity(8 + meta_bytes.len() + key_bytes.len());
+    payload.extend_from_slice(b"PQPM");
+    payload.extend_from_slice(&len.to_be_bytes());
+    payload.extend_from_slice(meta_bytes);
+    payload.extend_from_slice(key_bytes);
+    Ok(payload)
+}
+
+/// Unpack metadata and key bytes from a PQP payload.
+///
+/// Detects the new format (magic `b"PQPM"` prefix) vs. old format (raw key bytes).
+/// Returns (KeyMetadata, key_bytes) where the key_id in metadata is from the
+/// exported key (caller should override it).
+fn unpack_pqp_payload(
+    payload: &[u8],
+    kem_alg: &str,
+    dsa_alg: &str,
+) -> Result<(KeyMetadata, Vec<u8>)> {
+    // Try new format with magic prefix
+    if payload.starts_with(b"PQPM") && payload.len() >= 8 {
+        let meta_len = u32::from_be_bytes(
+            payload[4..8]
+                .try_into()
+                .expect("4 bytes for metadata length"),
+        ) as usize;
+        if 8 + meta_len <= payload.len() {
+            let meta_str = std::str::from_utf8(&payload[8..8 + meta_len])
+                .context("PQP metadata is not valid UTF-8")?;
+            if let Ok(meta) = toml::from_str::<KeyMetadata>(meta_str) {
+                let key_bytes = payload[8 + meta_len..].to_vec();
+                return Ok((meta, key_bytes));
+            }
+        }
+    }
+    // Fallback: old format — entire payload is key bytes, use defaults for metadata
+    let now = timestamp_iso8601();
+    let meta = KeyMetadata {
+        key_id: String::new(),
+        created_at: now,
+        user_id: "imported".into(),
+        kem_algorithm: kem_alg.into(),
+        sign_algorithm: dsa_alg.into(),
+        encoding_algorithm: "BASE64".into(),
+        compress_algorithm: "none".into(),
+        expiration_date: default_expiration(),
+        metadata: Vec::new(),
+        argon2_mem: default_argon2_mem(),
+        argon2_time: default_argon2_time(),
+        argon2_par: default_argon2_par(),
+        fingerprint: String::new(),
+    };
+    Ok((meta, payload.to_vec()))
 }
 
 /// Export a public key in PQP format (`AlgorithmList::EncodedPayload`).
@@ -491,10 +583,13 @@ pub fn export_public_key_pqp(key_id: &str, compress: Option<&format::Algorithm>)
     let public_bytes = std::fs::read(dir.join("pqp-public.der"))
         .context(format!("reading public key for {}", key_id))?;
 
+    // Pack metadata + key bytes into a single payload
+    let packed = pack_pqp_payload(&meta, &public_bytes)?;
+
     let data = if let Some(alg) = compress {
-        format::compress(&public_bytes, alg)?
+        format::compress(&packed, alg)?
     } else {
-        public_bytes
+        packed
     };
 
     let mut alg_vec = vec![
@@ -519,6 +614,7 @@ pub fn export_public_key_pqp(key_id: &str, compress: Option<&format::Algorithm>)
 /// Returns the imported key ID. The KEM and DSA variants are extracted
 /// from the algorithm string. If the payload was compressed, it is
 /// automatically decompressed using the algorithm stored in the list.
+/// Metadata (user_id, expiration_date, etc.) is restored from the payload.
 pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
     let (algorithms, mut payload) =
         format::deserialize(data.as_bytes()).context("parsing PQP key data")?;
@@ -538,34 +634,39 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         payload = format::decompress(&payload, alg)?;
     }
 
+    // Unpack metadata + key bytes (handles both new and old format)
+    let (exported_meta, key_bytes) =
+        unpack_pqp_payload(&payload, kem_variant.as_str(), dsa_variant.as_str())?;
+
+    let kem_pk_len = kem_variant.public_key_len();
+    let dsa_pk_len = dsa_variant.public_key_len();
+    if key_bytes.len() < kem_pk_len + dsa_pk_len {
+        return Err(anyhow::anyhow!("public key payload too short"));
+    }
+
     let key_id = generate_key_id()?;
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory for import")?;
 
-    let kem_pk_len = kem_variant.public_key_len();
-    let dsa_pk_len = dsa_variant.public_key_len();
-    if payload.len() < kem_pk_len + dsa_pk_len {
-        return Err(anyhow::anyhow!("public key payload too short"));
-    }
-
     let pub_path = dir.join("pqp-public.der");
-    std::fs::write(&pub_path, &payload)?;
+    std::fs::write(&pub_path, &key_bytes)?;
     std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
-    let now = timestamp_iso8601();
+    // Use exported metadata fields, but always generate a fresh key_id
     let meta = KeyMetadata {
         key_id: key_id.clone(),
-        created_at: now,
-        user_id: "imported".into(),
+        created_at: exported_meta.created_at,
+        user_id: exported_meta.user_id,
         kem_algorithm: kem_variant.as_str().into(),
         sign_algorithm: dsa_variant.as_str().into(),
-        encoding_algorithm: "BASE64".into(),
-        compress_algorithm: "none".into(),
-        expiration_date: default_expiration(),
-        metadata: Vec::new(),
-        argon2_mem: default_argon2_mem(),
-        argon2_time: default_argon2_time(),
-        argon2_par: default_argon2_par(),
+        encoding_algorithm: exported_meta.encoding_algorithm,
+        compress_algorithm: exported_meta.compress_algorithm,
+        expiration_date: exported_meta.expiration_date,
+        metadata: exported_meta.metadata,
+        argon2_mem: exported_meta.argon2_mem,
+        argon2_time: exported_meta.argon2_time,
+        argon2_par: exported_meta.argon2_par,
+        fingerprint: exported_meta.fingerprint,
     };
     let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta)?;
@@ -586,7 +687,8 @@ fn validate_key_id(key_id: &str) -> Result<()> {
 
 /// Import an ASCII-armored public key into the keyring.
 ///
-/// Returns the imported key ID.
+/// Restores system metadata (user_id, expiration_date, algorithm variants, etc.) from
+/// the armor headers. Returns the imported key ID.
 pub fn import_public_key(armored: &str) -> Result<String> {
     let (marker, decoded, armored_metadata) = armor::unarmor(armored)?;
 
@@ -604,23 +706,57 @@ pub fn import_public_key(armored: &str) -> Result<String> {
 
     let metadata_path = dir.join("pqp.conf");
     if !metadata_path.exists() {
-        let imported_metadata: Vec<MetadataEntry> = armored_metadata
-            .into_iter()
-            .map(|(k, v)| MetadataEntry { key: k, value: v })
-            .collect();
+        // Parse system headers from armor metadata
+        let mut user_id = "imported".to_string();
+        let mut created_at = timestamp_iso8601();
+        let mut kem_algorithm = "ML-KEM-768".to_string();
+        let mut sign_algorithm = "ML-DSA-65".to_string();
+        let mut encoding_algorithm = "BASE64".to_string();
+        let mut compress_algorithm = "none".to_string();
+        let mut expiration_date = default_expiration();
+        let mut argon2_mem = default_argon2_mem();
+        let mut argon2_time = default_argon2_time();
+        let mut argon2_par = default_argon2_par();
+        let mut fingerprint = String::new();
+        let mut user_metadata: Vec<MetadataEntry> = Vec::new();
+
+        for (k, v) in armored_metadata {
+            match k.as_str() {
+                "User-ID" => user_id = v,
+                "Created" => created_at = v,
+                "Expiration-Date" => expiration_date = v,
+                "KEM" => kem_algorithm = v,
+                "DSA" => sign_algorithm = v,
+                "Compress" => compress_algorithm = v,
+                "Encoding" => encoding_algorithm = v,
+                "Argon2-Mem" => {
+                    argon2_mem = v.parse().unwrap_or(default_argon2_mem());
+                }
+                "Argon2-Time" => {
+                    argon2_time = v.parse().unwrap_or(default_argon2_time());
+                }
+                "Argon2-Par" => {
+                    argon2_par = v.parse().unwrap_or(default_argon2_par());
+                }
+                "Fingerprint" => fingerprint = v,
+                _ => user_metadata.push(MetadataEntry { key: k, value: v }),
+            }
+        }
+
         let meta = KeyMetadata {
             key_id: key_id.clone(),
-            created_at: timestamp_iso8601(),
-            user_id: "imported".into(),
-            kem_algorithm: "ML-KEM-768".into(),
-            sign_algorithm: "ML-DSA-65".into(),
-            encoding_algorithm: "BASE64".into(),
-            compress_algorithm: "none".into(),
-            expiration_date: default_expiration(),
-            metadata: imported_metadata,
-            argon2_mem: default_argon2_mem(),
-            argon2_time: default_argon2_time(),
-            argon2_par: default_argon2_par(),
+            created_at,
+            user_id,
+            kem_algorithm,
+            sign_algorithm,
+            encoding_algorithm,
+            compress_algorithm,
+            expiration_date,
+            metadata: user_metadata,
+            argon2_mem,
+            argon2_time,
+            argon2_par,
+            fingerprint,
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;
