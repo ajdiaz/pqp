@@ -190,6 +190,21 @@ compress = "none"      # No compression on export
 
 A fully commented sample with detailed pros/cons for every value is at [`pqp.toml.sample`](pqp.toml.sample).
 
+### 🔒 Security hardening
+
+| Measure | Description |
+|---|---|
+| File permissions | Secret keys and metadata at rest use `0o600` (owner-only). Key directories use `0o700`. Public keys use `0o644`. |
+| Decompression limit | Output from any compressed payload is capped at 100 MiB to prevent decompression bombs. |
+| HTTP timeout | `import --url` enforces a 30-second timeout to prevent slow-loris attacks. |
+| Path validation | Key IDs are strictly validated as `^[0-9a-f]{16}$` before any filesystem operation. |
+| Key separation | KEM shared secrets undergo SHA3-256 KDF with domain separation (`pqp-kem-encrypt-v1`) per NIST SP 800-56C. |
+| Secrets zeroization | All passphrases and secret key material are zeroized in memory after use. |
+| Constant-time compare | Signature hash comparison uses `subtle::ConstantTimeEq`. |
+| Argon2id configurable | KDF parameters (memory, time, parallelism) are stored per-key and configurable via CLI or config file. |
+
+---
+
 ### ⚙️ Per-command options
 
 **gen-key:** `-u <user>` · `--no-passphrase` · `--kem <variant>` · `--dsa <variant>` · `--encoding <enc>` · `--compress <algo>` · `--expiration-date <date>` · `--metadata <key=value>` · `--argon2-mem <kib>` · `--argon2-time <count>` · `--argon2-par <count>`

@@ -20,6 +20,7 @@ use crate::expiry;
 use crate::format;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use zeroize::Zeroize;
@@ -231,6 +232,7 @@ pub fn resolve_key_id(identifier: &str) -> Result<String> {
 
     let key_dir = dir.join(identifier);
     if key_dir.is_dir() && key_dir.join("pqp.conf").exists() {
+        validate_key_id(identifier)?;
         return Ok(identifier.to_string());
     }
 
@@ -359,10 +361,15 @@ pub fn generate_key(
     wrapped.extend_from_slice(&nonce);
     wrapped.extend_from_slice(&encrypted_secret);
 
-    std::fs::write(dir.join("pqp-secret.der"), &wrapped).context("writing secret key")?;
+    let secret_path = dir.join("pqp-secret.der");
+    std::fs::write(&secret_path, &wrapped).context("writing secret key")?;
+    std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
 
+    let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta).context("serializing key metadata")?;
-    std::fs::write(dir.join("pqp.conf"), &conf_toml).context("writing key config")?;
+    std::fs::write(&conf_path, &conf_toml).context("writing key config")?;
+    std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
     Ok(meta)
 }
@@ -541,7 +548,9 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         return Err(anyhow::anyhow!("public key payload too short"));
     }
 
-    std::fs::write(dir.join("pqp-public.der"), &payload)?;
+    let pub_path = dir.join("pqp-public.der");
+    std::fs::write(&pub_path, &payload)?;
+    std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
     let now = timestamp_iso8601();
     let meta = KeyMetadata {
@@ -558,8 +567,11 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
         argon2_time: default_argon2_time(),
         argon2_par: default_argon2_par(),
     };
+    let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta)?;
-    std::fs::write(dir.join("pqp.conf"), &conf_toml)?;
+    std::fs::write(&conf_path, &conf_toml)?;
+    std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
     Ok(key_id)
 }
@@ -588,6 +600,8 @@ pub fn import_public_key(armored: &str) -> Result<String> {
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory for import")?;
 
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+
     let metadata_path = dir.join("pqp.conf");
     if !metadata_path.exists() {
         let imported_metadata: Vec<MetadataEntry> = armored_metadata
@@ -610,9 +624,12 @@ pub fn import_public_key(armored: &str) -> Result<String> {
         };
         let conf_toml = toml::to_string_pretty(&meta)?;
         std::fs::write(&metadata_path, &conf_toml)?;
+        std::fs::set_permissions(&metadata_path, std::fs::Permissions::from_mode(0o600))?;
     }
 
-    std::fs::write(dir.join("pqp-public.der"), &decoded)?;
+    let pub_path = dir.join("pqp-public.der");
+    std::fs::write(&pub_path, &decoded)?;
+    std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
     Ok(key_id)
 }
@@ -629,6 +646,7 @@ pub fn resolve_key_ids(identifier: &str) -> Result<Vec<String>> {
 
     let key_dir = dir.join(identifier);
     if key_dir.is_dir() && key_dir.join("pqp.conf").exists() {
+        validate_key_id(identifier)?;
         return Ok(vec![identifier.to_string()]);
     }
 

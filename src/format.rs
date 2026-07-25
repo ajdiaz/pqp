@@ -14,6 +14,10 @@
 use anyhow::{Context, Result};
 use std::str::FromStr;
 
+/// Maximum allowed decompressed output size (100 MiB) to prevent
+/// decompression bomb denial-of-service attacks.
+const MAX_DECOMPRESSED_SIZE: u64 = 100 * 1024 * 1024;
+
 const SEPARATOR: &str = "::";
 
 /// Canonical algorithm identifiers used in [`AlgorithmList`].
@@ -375,51 +379,60 @@ pub fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
 ///
 /// Supported algorithms: [`Zstd`](Algorithm::Zstd), [`Deflate`](Algorithm::Deflate),
 /// [`Gzip`](Algorithm::Gzip), [`Bzip2`](Algorithm::Bzip2), [`Lzma`](Algorithm::Lzma).
+/// Returns an error if the decompressed output exceeds [`MAX_DECOMPRESSED_SIZE`].
 pub fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
-    match alg {
+    let decompressed = match alg {
         Algorithm::Zstd => {
-            let decompressed = zstd::decode_all(std::io::Cursor::new(data))
-                .context("zstd decompression failed")?;
-            Ok(decompressed)
+            zstd::decode_all(std::io::Cursor::new(data)).context("zstd decompression failed")?
         }
         Algorithm::Deflate => {
             let mut decoder = flate2::read::ZlibDecoder::new(std::io::Cursor::new(data));
-            let mut decompressed = Vec::new();
+            let mut out = Vec::new();
             use std::io::Read;
             decoder
-                .read_to_end(&mut decompressed)
+                .read_to_end(&mut out)
                 .context("deflate decompression failed")?;
-            Ok(decompressed)
+            out
         }
         Algorithm::Gzip => {
             let mut decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(data));
-            let mut decompressed = Vec::new();
+            let mut out = Vec::new();
             use std::io::Read;
             decoder
-                .read_to_end(&mut decompressed)
+                .read_to_end(&mut out)
                 .context("gzip decompression failed")?;
-            Ok(decompressed)
+            out
         }
         Algorithm::Bzip2 => {
             let mut decoder = bzip2::read::BzDecoder::new(std::io::Cursor::new(data));
-            let mut decompressed = Vec::new();
+            let mut out = Vec::new();
             use std::io::Read;
             decoder
-                .read_to_end(&mut decompressed)
+                .read_to_end(&mut out)
                 .context("bzip2 decompression failed")?;
-            Ok(decompressed)
+            out
         }
         Algorithm::Lzma => {
-            let mut decompressed = Vec::new();
-            lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut decompressed)
+            let mut out = Vec::new();
+            lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut out)
                 .context("lzma decompression failed")?;
-            Ok(decompressed)
+            out
         }
-        _ => Err(anyhow::anyhow!(
-            "algorithm {} is not a compression algorithm",
-            alg.canonical_name()
-        )),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "algorithm {} is not a compression algorithm",
+                alg.canonical_name()
+            ))
+        }
+    };
+    if decompressed.len() > MAX_DECOMPRESSED_SIZE as usize {
+        anyhow::bail!(
+            "decompressed data too large: {} bytes (max {})",
+            decompressed.len(),
+            MAX_DECOMPRESSED_SIZE,
+        );
     }
+    Ok(decompressed)
 }
 
 /// Compose a payload by applying all encoding algorithms in the list.

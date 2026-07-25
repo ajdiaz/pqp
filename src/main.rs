@@ -190,14 +190,6 @@ fn main() -> Result<()> {
             for entry in &meta.metadata {
                 println!("  {}: {}", entry.key, entry.value);
             }
-            println!("Generated key pair: key-id={}", meta.key_id);
-            println!("  user-id: {}", meta.user_id);
-            println!("  created: {}", meta.created_at);
-            println!("  kem: {}", meta.kem_algorithm);
-            println!("  dsa: {}", meta.sign_algorithm);
-            println!("  encoding: {}", meta.encoding_algorithm);
-            println!("  compress: {}", meta.compress_algorithm);
-            println!("  expires: {}", meta.expiration_date);
         }
         Commands::ListKeys { mut format } => {
             if cli.dry_run {
@@ -229,10 +221,9 @@ fn main() -> Result<()> {
                                     .metadata
                                     .iter()
                                     .map(|e| {
-                                        format!(
-                                            r#"    {{ "key": "{}", "value": "{}" }}"#,
-                                            e.key, e.value
-                                        )
+                                        let k = serde_json::to_string(&e.key).unwrap_or_default();
+                                        let v = serde_json::to_string(&e.value).unwrap_or_default();
+                                        format!("    {{ \"key\": {}, \"value\": {} }}", k, v)
                                     })
                                     .collect();
                                 format!(",\n    \"metadata\": [\n{}\n    ]", entries.join(",\n"))
@@ -451,6 +442,7 @@ fn main() -> Result<()> {
             // KEM shared secret → symmetric key via SHA3-256 KDF (NIST SP 800-56C)
             use sha3::{Digest, Sha3_256};
             let mut kdf = Sha3_256::new();
+            kdf.update(b"pqp-kem-encrypt-v1");
             kdf.update(shared_secret);
             let sym_key = kdf.finalize();
             shared_secret.zeroize();
@@ -569,6 +561,7 @@ fn main() -> Result<()> {
                             // KDF shared secret to symmetric key (NIST SP 800-56C)
                             use sha3::{Digest, Sha3_256};
                             let mut kdf = Sha3_256::new();
+                            kdf.update(b"pqp-kem-encrypt-v1");
                             kdf.update(shared);
                             let sym_key = kdf.finalize();
                             let mut sym_key_arr = [0u8; 32];
@@ -802,7 +795,11 @@ fn main() -> Result<()> {
                 return Ok(());
             }
             let data = if let Some(url) = &url {
-                let response = ureq::get(url).call().context(format!("fetching {}", url))?;
+                let agent: ureq::Agent = ureq::Agent::config_builder()
+                    .timeout_global(Some(std::time::Duration::from_secs(30)))
+                    .build()
+                    .into();
+                let response = agent.get(url).call().context(format!("fetching {}", url))?;
                 response
                     .into_body()
                     .read_to_string()

@@ -419,14 +419,16 @@ Overridden by \fBPQP_HOME\fR.
 .TP
 \fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp.conf\fR
 Key metadata (TOML format): key ID, creation date, user ID,
-algorithm identifiers.  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp.conf\fR.
+algorithm identifiers.  Created with \fB0o600\fR permissions
+(owner read/write only).  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp.conf\fR.
 .TP
 \fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp-public.der\fR
 Public key bytes (raw DER).  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp-public.der\fR.
 .TP
 \fI~/.local/share/pqp/keys/\fIKEYID\fB/pqp-secret.der\fR
 Secret key bytes, passphrase-encrypted with Argon2id +
-XChaCha20-Poly1305.  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp-secret.der\fR.
+XChaCha20-Poly1305.  Created with \fB0o600\fR permissions
+(owner read/write only).  Fallback: \fI~/.pqp/keys/\fIKEYID\fB/pqp-secret.der\fR.
 .TP
 \fI.pqp.enc\fR
 Encrypted file output.

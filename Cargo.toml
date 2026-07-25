@@ -27,9 +27,10 @@ flate2 = "1"
 ascii85 = "0.1"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 subtle = "2"
-ureq = "3"
+ureq = { version = "3", features = ["json"] }
 bzip2 = "0.5"
 lzma-rs = "0.3"
+serde_json = "1.0.151"
 
 [dev-dependencies]
 tempfile = "3"

@@ -176,6 +176,19 @@
 //! Identifiers (key ID or user ID) are resolved by checking directory names
 //! first, then matching `user_id` in `pqp.conf` metadata.
 //!
+//! # Security hardening
+//!
+//! `pqp` applies the following security measures to protect key material and
+//! resist attacks:
+//!
+//! | Measure | Description |
+//! |---|---|
+//! | File permissions | Secret key files (`pqp-secret.der`) and metadata (`pqp.conf`) are created with `0o600` (owner read/write only). Key directories use `0o700`. Public keys use `0o644`. |
+//! | Decompression bomb protection | All decompression is limited to 100 MiB output, preventing OOM from malicious compressed files. |
+//! | KDF domain separation | The SHA3-256 KDF on KEM shared secrets includes a context label (`pqp-kem-encrypt-v1`) per NIST SP 800-56C. |
+//! | HTTP timeout | `import --url` enforces a 30-second timeout to prevent slow-loris DoS. |
+//! | Path traversal defense | Key ID resolution validates all directory names against `^[0-9a-f]{16}$` before use in filesystem operations. |
+//!
 //! # Quick start
 //!
 //! ```bash
