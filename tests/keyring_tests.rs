@@ -17,9 +17,9 @@ impl TestKeyring {
         let dir = std::env::temp_dir().join(format!("pqp_kr_{}", name));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        // Use KEYRING_PATH env var so both direct library calls (via keys_dir())
-        // and CLI subprocess calls (via main.rs startup) resolve to this directory.
-        std::env::set_var("KEYRING_PATH", &dir);
+        // Use thread-local override so parallel library tests don't interfere.
+        // CLI subprocess tests still need KEYRING_PATH env var passed manually.
+        pqp::keyring::set_keyring_override(Some(dir.clone()));
         TestKeyring { path: dir }
     }
 
@@ -30,6 +30,8 @@ impl TestKeyring {
 
 impl Drop for TestKeyring {
     fn drop(&mut self) {
+        // Clear the thread-local override so other tests aren't affected
+        pqp::keyring::set_keyring_override(None);
         let _ = std::fs::remove_dir_all(&self.path);
     }
 }

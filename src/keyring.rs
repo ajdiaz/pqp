@@ -20,23 +20,21 @@ use crate::expiry;
 use crate::format;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 use zeroize::Zeroize;
 
-/// Optional override for the keyring directory path, set via
-/// [`set_keyring_override`]. When set, all keyring operations use this
-/// path instead of the default XDG / legacy / PQP_HOME resolution.
-static KEYRING_OVERRIDE: OnceLock<Option<PathBuf>> = OnceLock::new();
+thread_local! {
+    static KEYRING_OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
 
-/// Override the keyring directory path for all subsequent keyring operations.
+/// Override the keyring directory path for all subsequent keyring operations
+/// in the current thread.
 ///
-/// Pass `None` to clear any override and use the default resolution. This
-/// must be called before any keyring operation — it has no effect once
-/// keyring functions have been called.
+/// Pass `None` to clear any override and use the default resolution.
 pub fn set_keyring_override(path: Option<PathBuf>) {
-    let _ = KEYRING_OVERRIDE.set(path);
+    KEYRING_OVERRIDE.with(|cell| *cell.borrow_mut() = path);
 }
 
 /// A key-value metadata pair associated with a key.
@@ -150,8 +148,10 @@ fn pqp_dir() -> Result<PathBuf> {
 }
 
 fn keys_dir() -> Result<PathBuf> {
-    if let Some(Some(override_path)) = KEYRING_OVERRIDE.get() {
-        return Ok(override_path.clone());
+    // Check thread-local override first
+    let local = KEYRING_OVERRIDE.with(|cell| cell.borrow().clone());
+    if let Some(path) = local {
+        return Ok(path);
     }
     if let Ok(env_path) = std::env::var("KEYRING_PATH") {
         return Ok(PathBuf::from(env_path));
