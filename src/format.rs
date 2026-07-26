@@ -378,7 +378,7 @@ pub fn compress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
 ///
 /// Supported algorithms: [`Zstd`](Algorithm::Zstd), [`Deflate`](Algorithm::Deflate),
 /// [`Gzip`](Algorithm::Gzip), [`Bzip2`](Algorithm::Bzip2), [`Lzma`](Algorithm::Lzma).
-/// Returns an error if the decompressed output exceeds [`MAX_DECOMPRESSED_SIZE`].
+/// Returns an error if the decompressed output exceeds 100 MiB.
 pub fn decompress(data: &[u8], alg: &Algorithm) -> Result<Vec<u8>> {
     let decompressed = match alg {
         Algorithm::Zstd => {
