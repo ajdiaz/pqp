@@ -223,5 +223,11 @@ pub enum Commands {
             help = "Skip confirmation prompt before importing"
         )]
         dont_ask_confirmation: bool,
+        #[arg(
+            long = "force",
+            short = 'f',
+            help = "Force override of an existing key with the same fingerprint"
+        )]
+        force: bool,
     },
 }

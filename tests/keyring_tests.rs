@@ -331,6 +331,7 @@ fn test_import_with_confirmation() {
         .args([
             "import",
             "--dont-ask-confirmation",
+            "--force",
             &key_file.to_string_lossy(),
         ])
         .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
@@ -694,6 +695,7 @@ fn test_import_from_stdin() {
         .args([
             "import",
             "--dont-ask-confirmation",
+            "--force",
             &key_file.to_string_lossy(),
         ])
         .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
@@ -767,7 +769,7 @@ fn test_import_public_key_from_pqp() {
     // Import into a different keyring
     let _import_k = TestKeyring::new("import_pqp_dest");
 
-    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, false).unwrap();
     assert!(!imported_id.is_empty());
     assert_ne!(imported_id, meta.key_id, "imported key should get a new ID");
 
@@ -832,7 +834,7 @@ fn test_import_public_key_armor_preserves_metadata() {
 
     // Import into a different keyring
     let _import_k = TestKeyring::new("import_armor_meta_dest");
-    let imported_id = pqp::keyring::import_public_key(&armored).unwrap();
+    let imported_id = pqp::keyring::import_public_key(&armored, false).unwrap();
 
     let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
     assert_eq!(
@@ -898,6 +900,134 @@ fn test_cli_export_pqp_format() {
 }
 
 #[test]
+fn test_import_armor_fingerprint_collision_rejected() {
+    let _k = TestKeyring::new("armor_collision_reject");
+    let meta = pqp::keyring::generate_key(
+        "collision-reject@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
+
+    // Re-importing without --force should fail due to fingerprint collision
+    let result = pqp::keyring::import_public_key(&armored, false);
+    assert!(
+        result.is_err(),
+        "reimport without --force should fail on fingerprint collision"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("already exists"),
+        "error should mention fingerprint collision: {err_msg}"
+    );
+}
+
+#[test]
+fn test_import_armor_fingerprint_collision_with_force() {
+    let _k = TestKeyring::new("armor_collision_force");
+    let meta = pqp::keyring::generate_key(
+        "collision-force@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let armored = pqp::keyring::export_public_key(&meta.key_id).unwrap();
+
+    // Force re-import should succeed, overwriting the existing key with same fingerprint
+    let imported_id = pqp::keyring::import_public_key(&armored, true).unwrap();
+
+    assert_eq!(imported_id, meta.key_id);
+
+    let (kem_pk, sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
+    assert!(!kem_pk.is_empty());
+    assert!(!sign_pk.is_empty());
+
+    let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
+    assert_eq!(imported_meta.fingerprint, meta.fingerprint);
+}
+
+#[test]
+fn test_import_pqp_fingerprint_collision_rejected() {
+    let _k = TestKeyring::new("pqp_collision_reject");
+    let meta = pqp::keyring::generate_key(
+        "pqp-collision-reject@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
+
+    // Re-importing without --force should fail due to fingerprint collision
+    let result = pqp::keyring::import_public_key_from_pqp(&pqp_data, false);
+    assert!(
+        result.is_err(),
+        "reimport without --force should fail on fingerprint collision"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("already exists"),
+        "error should mention fingerprint collision: {err_msg}"
+    );
+}
+
+#[test]
+fn test_import_pqp_fingerprint_collision_with_force() {
+    let _k = TestKeyring::new("pqp_collision_force");
+    let meta = pqp::keyring::generate_key(
+        "pqp-collision-force@example.com",
+        "pass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
+
+    // Force re-import should succeed, overwriting the existing key
+    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, true).unwrap();
+
+    assert_eq!(imported_id, meta.key_id);
+
+    let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
+    assert_eq!(imported_meta.fingerprint, meta.fingerprint);
+}
+
+#[test]
 fn test_cli_import_pqp_format() {
     let k = TestKeyring::new("cli_import_pqp");
     let meta = pqp::keyring::generate_key(
@@ -923,6 +1053,7 @@ fn test_cli_import_pqp_format() {
         .args([
             "import",
             "--dont-ask-confirmation",
+            "--force",
             &key_file.to_string_lossy(),
         ])
         .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
@@ -957,7 +1088,7 @@ fn test_pqp_format_roundtrip() {
     let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
     // Import into the same keyring (override already set)
-    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+    let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, true).unwrap();
 
     let (kem_pk, _sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
     let pk = pqp::crypto::kem::PublicKey::from_bytes(&kem_pk, KemVariant::MlKem768).unwrap();
@@ -1004,7 +1135,7 @@ fn test_pqp_format_compressed_roundtrip() {
         );
 
         let _import_k = TestKeyring::new(&format!("pqp_compress_imp_{}", suffix));
-        let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data).unwrap();
+        let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, false).unwrap();
 
         let (kem_pk, sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
         let pk = pqp::crypto::kem::PublicKey::from_bytes(&kem_pk, KemVariant::MlKem768).unwrap();
@@ -1066,6 +1197,7 @@ fn test_cli_export_pqp_with_compression() {
         .args([
             "import",
             "--dont-ask-confirmation",
+            "--force",
             &out_file.to_string_lossy(),
         ])
         .env("KEYRING_PATH", k.path().to_string_lossy().to_string())

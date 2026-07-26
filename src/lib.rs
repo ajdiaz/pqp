@@ -157,13 +157,19 @@
 //! applied before encoding and auto-detected on import.
 //!
 //! ### `import`
-//! `pqp import [--url <url>] [--dont-ask-confirmation] [infile]`
+//! `pqp import [--url <url>] [--dont-ask-confirmation] [--force] [infile]`
 //!
 //! | Flag | Description |
 //! |---|---|
 //! | `--url` | URL to fetch the armored key from |
 //! | `--dont-ask-confirmation` | Skip confirmation prompt before importing |
+//! | `-f`, `--force` | Force override an existing key with the same fingerprint |
 //! | `infile` | Armored key file path (omit or `-` for stdin) |
+//!
+//! When a key with the same fingerprint (SHA3-256 of public key material) already
+//! exists in the keyring, the import is rejected unless `--force` is used. This
+//! prevents accidentally overwriting keys. Keys that have a private key (pub+sec) are
+//! never overridden automatically.
 //!
 //! ### `remove-key`
 //! `pqp remove-key <key-id-or-user-id> [--dont-ask] [--remove-private-key]`

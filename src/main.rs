@@ -862,6 +862,7 @@ fn main() -> Result<()> {
             input,
             url,
             dont_ask_confirmation,
+            force,
         } => {
             if cli.dry_run {
                 eprintln!("[dry-run] would import: no action taken");
@@ -892,10 +893,10 @@ fn main() -> Result<()> {
                     println!("Import cancelled.");
                     return Ok(());
                 }
-                let key_id = keyring::import_public_key(&data)?;
+                let key_id = keyring::import_public_key(&data, force)?;
                 println!("Imported: key-id={}", key_id);
             } else {
-                let key_id = keyring::import_public_key_from_pqp(&data)?;
+                let key_id = keyring::import_public_key_from_pqp(&data, force)?;
                 if !dont_ask_confirmation && !confirm_import(&key_id)? {
                     println!("Import cancelled.");
                     return Ok(());

@@ -615,7 +615,7 @@ pub fn export_public_key_pqp(key_id: &str, compress: Option<&format::Algorithm>)
 /// from the algorithm string. If the payload was compressed, it is
 /// automatically decompressed using the algorithm stored in the list.
 /// Metadata (user_id, expiration_date, etc.) is restored from the payload.
-pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
+pub fn import_public_key_from_pqp(data: &str, force_override: bool) -> Result<String> {
     let (algorithms, mut payload) =
         format::deserialize(data.as_bytes()).context("parsing PQP key data")?;
 
@@ -637,6 +637,62 @@ pub fn import_public_key_from_pqp(data: &str) -> Result<String> {
     // Unpack metadata + key bytes (handles both new and old format)
     let (exported_meta, key_bytes) =
         unpack_pqp_payload(&payload, kem_variant.as_str(), dsa_variant.as_str())?;
+
+    // Check for fingerprint collision
+    if !exported_meta.fingerprint.is_empty() {
+        if let Some(existing_id) = find_key_by_fingerprint(&exported_meta.fingerprint)? {
+            if force_override {
+                // Overwrite the existing key
+                remove_key(&existing_id, false)?;
+                let dir = keys_dir()?.join(&existing_id);
+                std::fs::create_dir_all(&dir).context("creating key directory for import")?;
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+
+                let kem_pk_len = kem_variant.public_key_len();
+                let dsa_pk_len = dsa_variant.public_key_len();
+                if key_bytes.len() < kem_pk_len + dsa_pk_len {
+                    return Err(anyhow::anyhow!("public key payload too short"));
+                }
+
+                let pub_path = dir.join("pqp-public.der");
+                std::fs::write(&pub_path, &key_bytes)?;
+                std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
+
+                let meta = KeyMetadata {
+                    key_id: existing_id.clone(),
+                    created_at: exported_meta.created_at,
+                    user_id: exported_meta.user_id,
+                    kem_algorithm: kem_variant.as_str().into(),
+                    sign_algorithm: dsa_variant.as_str().into(),
+                    encoding_algorithm: exported_meta.encoding_algorithm,
+                    compress_algorithm: exported_meta.compress_algorithm,
+                    expiration_date: exported_meta.expiration_date,
+                    metadata: exported_meta.metadata,
+                    argon2_mem: exported_meta.argon2_mem,
+                    argon2_time: exported_meta.argon2_time,
+                    argon2_par: exported_meta.argon2_par,
+                    fingerprint: exported_meta.fingerprint,
+                };
+                let conf_path = dir.join("pqp.conf");
+                let conf_toml = toml::to_string_pretty(&meta)?;
+                std::fs::write(&conf_path, &conf_toml)?;
+                std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+
+                return Ok(existing_id);
+            } else if key_has_private_key(&existing_id)? {
+                return Err(anyhow::anyhow!(
+                    "key with fingerprint {} already exists (has private key, not overridden)",
+                    exported_meta.fingerprint
+                ));
+            } else {
+                return Err(anyhow::anyhow!(
+                    "key with fingerprint {} already exists, use --force to override",
+                    exported_meta.fingerprint
+                ));
+            }
+        }
+    }
 
     let kem_pk_len = kem_variant.public_key_len();
     let dsa_pk_len = dsa_variant.public_key_len();
@@ -688,8 +744,11 @@ fn validate_key_id(key_id: &str) -> Result<()> {
 /// Import an ASCII-armored public key into the keyring.
 ///
 /// Restores system metadata (user_id, expiration_date, algorithm variants, etc.) from
-/// the armor headers. Returns the imported key ID.
-pub fn import_public_key(armored: &str) -> Result<String> {
+/// the armor headers. If `force_override` is `true` and a key with
+/// the same fingerprint already exists in the keyring, the existing
+/// key is overwritten. Otherwise a fingerprint collision returns
+/// an error to the caller.
+pub fn import_public_key(armored: &str, force_override: bool) -> Result<String> {
     let (marker, decoded, armored_metadata) = armor::unarmor(armored)?;
 
     let key_id = marker
@@ -699,6 +758,92 @@ pub fn import_public_key(armored: &str) -> Result<String> {
         .to_string();
     validate_key_id(&key_id).context("invalid key ID in armor marker")?;
 
+    // Parse system headers from armor metadata
+    let mut user_id = "imported".to_string();
+    let mut created_at = timestamp_iso8601();
+    let mut kem_algorithm = "ML-KEM-768".to_string();
+    let mut sign_algorithm = "ML-DSA-65".to_string();
+    let mut encoding_algorithm = "BASE64".to_string();
+    let mut compress_algorithm = "none".to_string();
+    let mut expiration_date = default_expiration();
+    let mut argon2_mem = default_argon2_mem();
+    let mut argon2_time = default_argon2_time();
+    let mut argon2_par = default_argon2_par();
+    let mut fingerprint = String::new();
+    let mut user_metadata: Vec<MetadataEntry> = Vec::new();
+
+    for (k, v) in armored_metadata {
+        match k.as_str() {
+            "User-ID" => user_id = v,
+            "Created" => created_at = v,
+            "Expiration-Date" => expiration_date = v,
+            "KEM" => kem_algorithm = v,
+            "DSA" => sign_algorithm = v,
+            "Compress" => compress_algorithm = v,
+            "Encoding" => encoding_algorithm = v,
+            "Argon2-Mem" => {
+                argon2_mem = v.parse().unwrap_or(default_argon2_mem());
+            }
+            "Argon2-Time" => {
+                argon2_time = v.parse().unwrap_or(default_argon2_time());
+            }
+            "Argon2-Par" => {
+                argon2_par = v.parse().unwrap_or(default_argon2_par());
+            }
+            "Fingerprint" => fingerprint = v,
+            _ => user_metadata.push(MetadataEntry { key: k, value: v }),
+        }
+    }
+
+    // Check for fingerprint collision
+    if !fingerprint.is_empty() {
+        if let Some(existing_id) = find_key_by_fingerprint(&fingerprint)? {
+            if force_override {
+                // Overwrite the existing key: remove it first, then use its key_id
+                remove_key(&existing_id, false)?;
+                let dir = keys_dir()?.join(&existing_id);
+                std::fs::create_dir_all(&dir).context("creating key directory for import")?;
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+
+                let metadata_path = dir.join("pqp.conf");
+                let meta = KeyMetadata {
+                    key_id: existing_id.clone(),
+                    created_at,
+                    user_id,
+                    kem_algorithm,
+                    sign_algorithm,
+                    encoding_algorithm,
+                    compress_algorithm,
+                    expiration_date,
+                    metadata: user_metadata,
+                    argon2_mem,
+                    argon2_time,
+                    argon2_par,
+                    fingerprint: fingerprint.clone(),
+                };
+                let conf_toml = toml::to_string_pretty(&meta)?;
+                std::fs::write(&metadata_path, &conf_toml)?;
+                std::fs::set_permissions(&metadata_path, std::fs::Permissions::from_mode(0o600))?;
+
+                let pub_path = dir.join("pqp-public.der");
+                std::fs::write(&pub_path, &decoded)?;
+                std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
+
+                return Ok(existing_id);
+            } else if key_has_private_key(&existing_id)? {
+                return Err(anyhow::anyhow!(
+                    "key with fingerprint {} already exists (has private key, not overridden)",
+                    fingerprint
+                ));
+            } else {
+                return Err(anyhow::anyhow!(
+                    "key with fingerprint {} already exists, use --force to override",
+                    fingerprint
+                ));
+            }
+        }
+    }
+
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory for import")?;
 
@@ -706,43 +851,6 @@ pub fn import_public_key(armored: &str) -> Result<String> {
 
     let metadata_path = dir.join("pqp.conf");
     if !metadata_path.exists() {
-        // Parse system headers from armor metadata
-        let mut user_id = "imported".to_string();
-        let mut created_at = timestamp_iso8601();
-        let mut kem_algorithm = "ML-KEM-768".to_string();
-        let mut sign_algorithm = "ML-DSA-65".to_string();
-        let mut encoding_algorithm = "BASE64".to_string();
-        let mut compress_algorithm = "none".to_string();
-        let mut expiration_date = default_expiration();
-        let mut argon2_mem = default_argon2_mem();
-        let mut argon2_time = default_argon2_time();
-        let mut argon2_par = default_argon2_par();
-        let mut fingerprint = String::new();
-        let mut user_metadata: Vec<MetadataEntry> = Vec::new();
-
-        for (k, v) in armored_metadata {
-            match k.as_str() {
-                "User-ID" => user_id = v,
-                "Created" => created_at = v,
-                "Expiration-Date" => expiration_date = v,
-                "KEM" => kem_algorithm = v,
-                "DSA" => sign_algorithm = v,
-                "Compress" => compress_algorithm = v,
-                "Encoding" => encoding_algorithm = v,
-                "Argon2-Mem" => {
-                    argon2_mem = v.parse().unwrap_or(default_argon2_mem());
-                }
-                "Argon2-Time" => {
-                    argon2_time = v.parse().unwrap_or(default_argon2_time());
-                }
-                "Argon2-Par" => {
-                    argon2_par = v.parse().unwrap_or(default_argon2_par());
-                }
-                "Fingerprint" => fingerprint = v,
-                _ => user_metadata.push(MetadataEntry { key: k, value: v }),
-            }
-        }
-
         let meta = KeyMetadata {
             key_id: key_id.clone(),
             created_at,
@@ -873,6 +981,27 @@ pub fn purge_keys(remove_private: bool) -> Result<usize> {
 pub fn check_key_expired(key_id: &str) -> Result<bool> {
     let meta = read_metadata(key_id)?;
     Ok(expiry::is_expired(&meta.expiration_date))
+}
+
+/// Search the keyring for a key with the given fingerprint.
+///
+/// Returns the key ID if found, `None` otherwise.
+pub fn find_key_by_fingerprint(fingerprint: &str) -> Result<Option<String>> {
+    let keys = list_keys()?;
+    for key in &keys {
+        if key.fingerprint == fingerprint && !fingerprint.is_empty() {
+            return Ok(Some(key.key_id.clone()));
+        }
+    }
+    Ok(None)
+}
+
+/// Check whether a key has a private (secret) key file on disk.
+///
+/// Returns `true` if `pqp-secret.der` exists in the key directory.
+pub fn key_has_private_key(key_id: &str) -> Result<bool> {
+    let dir = keys_dir()?.join(key_id);
+    Ok(dir.join("pqp-secret.der").exists())
 }
 
 fn generate_key_id() -> Result<String> {
