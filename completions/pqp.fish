@@ -87,5 +87,6 @@ complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l help -d "Print
 complete -c pqp -f -n "__fish_use_subcommand" -a import -d "Import a public key"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l url -d "URL to fetch the armored key from" -r
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l dont-ask-confirmation -d "Skip confirmation prompt"
+complete -c pqp -f -n "__fish_seen_subcommand_from import" -l force -d "Force override of existing key with same fingerprint"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l help -d "Print help"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -a "(__fish_complete_path)" -d "Armored key file"

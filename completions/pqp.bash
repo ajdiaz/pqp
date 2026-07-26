@@ -187,7 +187,7 @@ _pqp() {
                     return
                     ;;
                 *)
-                    COMPREPLY=($(compgen -W '--url --dont-ask-confirmation --help -h' -- "$cur"))
+                    COMPREPLY=($(compgen -W '--url --dont-ask-confirmation --force --help -h' -- "$cur"))
                     return
                     ;;
             esac

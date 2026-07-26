@@ -119,6 +119,8 @@ pqp export --format pqp --compress none a1b2c3...   # PQP without compression
 pqp import alice.pqp.asc                             # Auto-detects format
 pqp import key.pqp.pub                               # PQP format auto-detected
 pqp import --url https://keys.example.com/bob.pqp.asc
+pqp import --force key.pqp.pub                        # Override key with same fingerprint
+pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 pqp purge-keys                                                 # Remove all public keys (asks confirmation)
 pqp purge-keys --no-ask-confirmation                           # Remove all public keys (no prompt)

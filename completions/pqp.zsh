@@ -147,6 +147,7 @@ _pqp_import() {
     _arguments \
         '--url[URL to fetch the armored key from]:url:' \
         '--dont-ask-confirmation[Skip confirmation prompt before importing]' \
+        '--force[Force override of an existing key with the same fingerprint]' \
         '*:input file:_files'
 }
 

@@ -352,6 +352,9 @@ Import a public key from an armored file, PQP format, or URL.
 Auto-detects format (armor or PQP).  The key is stored in the local
 keyring.  Confirmation is prompted before importing unless
 \fB\-\-dont\-ask\-confirmation\fR is given.
+If a key with the same fingerprint already exists in the keyring,
+the import is rejected unless \fB\-\-force\fR is used.  Keys that
+have a private key (\fBpub+sec\fR) are never overridden automatically.
 .TP
 \fI\,INFILE\/\fR
 Armored key file.  Omit or use \(oq\-\(cq for stdin.
@@ -361,6 +364,9 @@ URL to fetch the armored key from.
 .TP
 \fB\-\-dont\-ask\-confirmation\fR
 Skip confirmation prompt.
+.TP
+\fB\-\-force\fR, \fB\-f\fR
+Force override of an existing key with the same fingerprint.
 
 .SS remove\-key
 Remove a public key (and optionally private key) from the keyring.
