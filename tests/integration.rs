@@ -6,12 +6,15 @@ use pqp::crypto::{DsaVariant, KemVariant};
 use std::path::PathBuf;
 use std::process::Command;
 
+mod common;
+
 fn pqp_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pqp"))
 }
 
 #[test]
 fn test_gen_key_and_list_keys() {
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "test@example.com",
         "testpass",
@@ -262,6 +265,7 @@ fn test_keygen_produces_valid_keys() {
 
 #[test]
 fn test_cli_sign_verify_stdin() {
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "sign-stdin@example.com",
         "",
@@ -277,13 +281,12 @@ fn test_cli_sign_verify_stdin() {
     )
     .unwrap();
 
-    let outdir = std::env::temp_dir().join(format!("pqp_sign_stdin_{}", meta.key_id));
-    let _ = std::fs::remove_dir_all(&outdir);
-    std::fs::create_dir_all(&outdir).unwrap();
-    let sig_path = outdir.join("msg.txt.pqp.sig");
-    let data_path = outdir.join("msg.txt");
+    let outdir = tempfile::tempdir().unwrap();
+    let sig_path = outdir.path().join("msg.txt.pqp.sig");
+    let data_path = outdir.path().join("msg.txt");
     std::fs::write(&data_path, b"sign me via stdin").unwrap();
 
+    let keyring_path = k.path().to_string_lossy().to_string();
     let output = Command::new(pqp_binary())
         .args([
             "sign",
@@ -294,7 +297,7 @@ fn test_cli_sign_verify_stdin() {
             &sig_path.to_string_lossy(),
             &data_path.to_string_lossy(),
         ])
-        .env_remove("HOME")
+        .env("KEYRING_PATH", &keyring_path)
         .output()
         .unwrap();
     assert!(
@@ -309,7 +312,7 @@ fn test_cli_sign_verify_stdin() {
             &sig_path.to_string_lossy(),
             &data_path.to_string_lossy(),
         ])
-        .env_remove("HOME")
+        .env("KEYRING_PATH", &keyring_path)
         .output()
         .unwrap();
     assert!(
@@ -318,12 +321,11 @@ fn test_cli_sign_verify_stdin() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("Verified"));
-
-    let _ = std::fs::remove_dir_all(&outdir);
 }
 
 #[test]
 fn test_gen_key_no_passphrase() {
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "nopass@example.com",
         "",

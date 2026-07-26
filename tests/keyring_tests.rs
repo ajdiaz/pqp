@@ -1,51 +1,18 @@
 use pqp::armor::Encoding;
 use pqp::crypto::{DsaVariant, KemVariant};
-use std::path::PathBuf;
 
-/// RAII guard for a temporary keyring directory.
-///
-/// Creates a unique temp directory, sets it as the keyring override
-/// via [`pqp::keyring::set_keyring_override`], and removes it on Drop.
-/// For CLI subprocess tests, use [`path()`](TestKeyring::path) and pass
-/// it via `KEYRING_PATH` env var.
-struct TestKeyring {
-    path: PathBuf,
-}
-
-impl TestKeyring {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("pqp_kr_{}", name));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        // Use thread-local override so parallel library tests don't interfere.
-        // CLI subprocess tests still need KEYRING_PATH env var passed manually.
-        pqp::keyring::set_keyring_override(Some(dir.clone()));
-        TestKeyring { path: dir }
-    }
-
-    fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl Drop for TestKeyring {
-    fn drop(&mut self) {
-        // Clear the thread-local override so other tests aren't affected
-        pqp::keyring::set_keyring_override(None);
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
+mod common;
 
 #[test]
 fn test_list_keys_empty() {
-    let _k = TestKeyring::new("list_empty");
+    let _k = common::TestKeyring::new();
     let keys = pqp::keyring::list_keys().unwrap();
     assert!(keys.is_empty());
 }
 
 #[test]
 fn test_generate_and_export() {
-    let k = TestKeyring::new("gen_export");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "test@example.com",
         "testpass",
@@ -90,7 +57,7 @@ fn test_generate_and_export() {
 
 #[test]
 fn test_generate_and_load_keys() {
-    let _k = TestKeyring::new("gen_load");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "load-test@example.com",
         "mypass",
@@ -131,7 +98,7 @@ fn test_generate_and_load_keys() {
 
 #[test]
 fn test_key_info_fields() {
-    let _k = TestKeyring::new("key_info");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "info@example.com",
         "pass",
@@ -162,7 +129,7 @@ fn test_key_info_fields() {
 
 #[test]
 fn test_key_expiration_relative() {
-    let _k = TestKeyring::new("exp_rel");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "exp-rel@example.com",
         "pass",
@@ -189,7 +156,7 @@ fn test_key_expiration_relative() {
 
 #[test]
 fn test_key_expiration_absolute() {
-    let _k = TestKeyring::new("exp_abs");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "exp-abs@example.com",
         "pass",
@@ -212,7 +179,7 @@ fn test_key_expiration_absolute() {
 
 #[test]
 fn test_key_expired_check() {
-    let _k = TestKeyring::new("exp_chk");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "exp-chk@example.com",
         "pass",
@@ -233,7 +200,7 @@ fn test_key_expired_check() {
 
 #[test]
 fn test_resolve_key_id_by_key_id() {
-    let _k = TestKeyring::new("resolve_id");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "resolve@example.com",
         "pass",
@@ -255,7 +222,7 @@ fn test_resolve_key_id_by_key_id() {
 
 #[test]
 fn test_resolve_key_id_by_user_id() {
-    let _k = TestKeyring::new("resolve_user");
+    let _k = common::TestKeyring::new();
     pqp::keyring::generate_key(
         "alice@example.com",
         "pass",
@@ -278,14 +245,14 @@ fn test_resolve_key_id_by_user_id() {
 
 #[test]
 fn test_resolve_key_id_not_found() {
-    let _k = TestKeyring::new("resolve_nf");
+    let _k = common::TestKeyring::new();
     let result = pqp::keyring::resolve_key_id("nonexistent");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_key_info_public_only_key() {
-    let k = TestKeyring::new("pub_only");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "pubonly@example.com",
         "pass",
@@ -310,7 +277,7 @@ fn test_key_info_public_only_key() {
 
 #[test]
 fn test_import_with_confirmation() {
-    let k = TestKeyring::new("import_confirm");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "export@example.com",
         "pass",
@@ -349,7 +316,7 @@ fn test_import_with_confirmation() {
 
 #[test]
 fn test_remove_key_public_only() {
-    let k = TestKeyring::new("remove_pub");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "remove-pub@example.com",
         "pass",
@@ -383,7 +350,7 @@ fn test_remove_key_public_only() {
 
 #[test]
 fn test_remove_key_public_and_private() {
-    let k = TestKeyring::new("remove_both");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "remove-both@example.com",
         "pass",
@@ -411,14 +378,14 @@ fn test_remove_key_public_and_private() {
 
 #[test]
 fn test_remove_key_nonexistent() {
-    let _k = TestKeyring::new("remove_nonexistent");
+    let _k = common::TestKeyring::new();
     let result = pqp::keyring::remove_key("nonexistent-key-id", false);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_resolve_key_ids_by_key_id() {
-    let _k = TestKeyring::new("res_ids_id");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "resolve-ids@example.com",
         "pass",
@@ -440,7 +407,7 @@ fn test_resolve_key_ids_by_key_id() {
 
 #[test]
 fn test_resolve_key_ids_by_user_id() {
-    let _k = TestKeyring::new("res_ids_user");
+    let _k = common::TestKeyring::new();
     pqp::keyring::generate_key(
         "multi@example.com",
         "pass",
@@ -477,14 +444,14 @@ fn test_resolve_key_ids_by_user_id() {
 
 #[test]
 fn test_resolve_key_ids_not_found() {
-    let _k = TestKeyring::new("res_ids_nf");
+    let _k = common::TestKeyring::new();
     let result = pqp::keyring::resolve_key_ids("nonexistent");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_cli_remove_key_public_only() {
-    let k = TestKeyring::new("cli_remove_pub");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "cli-remove-pub@example.com",
         "pass",
@@ -518,7 +485,7 @@ fn test_cli_remove_key_public_only() {
 
 #[test]
 fn test_cli_remove_key_public_and_private() {
-    let k = TestKeyring::new("cli_remove_both");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "cli-remove-both@example.com",
         "pass",
@@ -552,7 +519,7 @@ fn test_cli_remove_key_public_and_private() {
 
 #[test]
 fn test_cli_remove_key_by_user_id() {
-    let k = TestKeyring::new("cli_remove_user");
+    let k = common::TestKeyring::new();
     pqp::keyring::generate_key(
         "remove-by-user@example.com",
         "pass",
@@ -601,7 +568,7 @@ fn test_cli_remove_key_by_user_id() {
 
 #[test]
 fn test_cli_remove_key_not_found() {
-    let k = TestKeyring::new("cli_remove_nf");
+    let k = common::TestKeyring::new();
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pqp"))
         .args(["remove-key", "--dont-ask", "nonexistent-key"])
         .env("KEYRING_PATH", k.path().to_string_lossy().to_string())
@@ -613,7 +580,7 @@ fn test_cli_remove_key_not_found() {
 
 #[test]
 fn test_list_keys_json_format() {
-    let k = TestKeyring::new("list_json");
+    let k = common::TestKeyring::new();
     pqp::keyring::generate_key(
         "json@example.com",
         "pass",
@@ -644,7 +611,7 @@ fn test_list_keys_json_format() {
 
 #[test]
 fn test_list_keys_no_headers_format() {
-    let k = TestKeyring::new("list_nohead");
+    let k = common::TestKeyring::new();
     pqp::keyring::generate_key(
         "nohead@example.com",
         "pass",
@@ -674,7 +641,7 @@ fn test_list_keys_no_headers_format() {
 
 #[test]
 fn test_import_from_stdin() {
-    let k = TestKeyring::new("import_stdin");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "stdinimport@example.com",
         "pass",
@@ -713,7 +680,7 @@ fn test_import_from_stdin() {
 
 #[test]
 fn test_export_public_key_pqp_format() {
-    let _k = TestKeyring::new("export_pqp");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "pqp-export@example.com",
         "pass",
@@ -750,7 +717,7 @@ fn test_export_public_key_pqp_format() {
 
 #[test]
 fn test_import_public_key_from_pqp() {
-    let _k = TestKeyring::new("import_pqp");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "pqp-import@example.com",
         "pass",
@@ -769,7 +736,7 @@ fn test_import_public_key_from_pqp() {
     let pqp_data = pqp::keyring::export_public_key_pqp(&meta.key_id, None).unwrap();
 
     // Import into a different keyring
-    let _import_k = TestKeyring::new("import_pqp_dest");
+    let _import_k = common::TestKeyring::new();
 
     let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, false).unwrap();
     assert!(!imported_id.is_empty());
@@ -812,7 +779,7 @@ fn test_import_public_key_from_pqp() {
 
 #[test]
 fn test_import_public_key_armor_preserves_metadata() {
-    let _k = TestKeyring::new("import_armor_meta");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "armor-preserve@example.com",
         "pass",
@@ -835,7 +802,7 @@ fn test_import_public_key_armor_preserves_metadata() {
     assert!(armored.contains("DSA: ML-DSA-65"));
 
     // Import into a different keyring
-    let _import_k = TestKeyring::new("import_armor_meta_dest");
+    let _import_k = common::TestKeyring::new();
     let imported_id = pqp::keyring::import_public_key(&armored, false).unwrap();
 
     let imported_meta = pqp::keyring::read_metadata(&imported_id).unwrap();
@@ -860,7 +827,7 @@ fn test_import_public_key_armor_preserves_metadata() {
 
 #[test]
 fn test_cli_export_pqp_format() {
-    let k = TestKeyring::new("cli_export_pqp");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "cli-pqp-export@example.com",
         "pass",
@@ -903,7 +870,7 @@ fn test_cli_export_pqp_format() {
 
 #[test]
 fn test_import_armor_fingerprint_collision_rejected() {
-    let _k = TestKeyring::new("armor_collision_reject");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "collision-reject@example.com",
         "pass",
@@ -936,7 +903,7 @@ fn test_import_armor_fingerprint_collision_rejected() {
 
 #[test]
 fn test_import_armor_fingerprint_collision_with_force() {
-    let _k = TestKeyring::new("armor_collision_force");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "collision-force@example.com",
         "pass",
@@ -969,7 +936,7 @@ fn test_import_armor_fingerprint_collision_with_force() {
 
 #[test]
 fn test_import_pqp_fingerprint_collision_rejected() {
-    let _k = TestKeyring::new("pqp_collision_reject");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "pqp-collision-reject@example.com",
         "pass",
@@ -1002,7 +969,7 @@ fn test_import_pqp_fingerprint_collision_rejected() {
 
 #[test]
 fn test_import_pqp_fingerprint_collision_with_force() {
-    let _k = TestKeyring::new("pqp_collision_force");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "pqp-collision-force@example.com",
         "pass",
@@ -1031,7 +998,7 @@ fn test_import_pqp_fingerprint_collision_with_force() {
 
 #[test]
 fn test_cli_import_pqp_format() {
-    let k = TestKeyring::new("cli_import_pqp");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "cli-pqp-import@example.com",
         "pass",
@@ -1071,7 +1038,7 @@ fn test_cli_import_pqp_format() {
 
 #[test]
 fn test_pqp_format_roundtrip() {
-    let _k = TestKeyring::new("pqp_roundtrip");
+    let _k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "roundtrip@example.com",
         "pass",
@@ -1113,7 +1080,7 @@ fn test_pqp_format_compressed_roundtrip() {
         ("gzip", "GZIP", pqp::format::Algorithm::Gzip),
         ("deflate", "DEFLATE", pqp::format::Algorithm::Deflate),
     ] {
-        let _gen_k = TestKeyring::new(&format!("pqp_compress_gen_{}", suffix));
+        let _gen_k = common::TestKeyring::new();
         let meta = pqp::keyring::generate_key(
             &format!("compress-{}@example.com", suffix),
             "pass",
@@ -1136,7 +1103,7 @@ fn test_pqp_format_compressed_roundtrip() {
             name
         );
 
-        let _import_k = TestKeyring::new(&format!("pqp_compress_imp_{}", suffix));
+        let _import_k = common::TestKeyring::new();
         let imported_id = pqp::keyring::import_public_key_from_pqp(&pqp_data, false).unwrap();
 
         let (kem_pk, sign_pk, _, _) = pqp::keyring::load_public_key(&imported_id).unwrap();
@@ -1153,7 +1120,7 @@ fn test_pqp_format_compressed_roundtrip() {
 
 #[test]
 fn test_cli_export_pqp_with_compression() {
-    let k = TestKeyring::new("cli_pqp_compr");
+    let k = common::TestKeyring::new();
     let meta = pqp::keyring::generate_key(
         "cli-pqp-compress@example.com",
         "pass",
