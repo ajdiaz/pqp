@@ -281,6 +281,26 @@ format = "pqp"
 #   "lzma"         — LZMA compression. Best ratio, slowest.
 compress = "zstd"
 
+# ── edit-key ─────────────────────────────────────────────────────────────
+# Default options for editing existing keys.
+# CLI flags --user, --expiration-date, --encoding, --compress override these.
+
+[edit-key]
+
+# New user ID for the key. Overwrites the existing user ID.
+# Uncomment to set a default:
+# user = "new-name@example.com"
+
+# New expiration date for the key. Same format as gen-key's expiration-date.
+# Relative: "30d", "1y", "6m". Absolute: "2030-12-31".
+# expiration-date = "2y"
+
+# New encoding for armored output.
+# encoding = "ASCII85"
+
+# New default compression algorithm preference stored in key metadata.
+# compress = "zstd"
+
 # ── keyring ─────────────────────────────────────────────────────────────
 # Override the default keyring directory path.
 # By default, pqp stores keys in ~/.local/share/pqp/keys/ (XDG data dir),

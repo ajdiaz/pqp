@@ -18,6 +18,7 @@ _pqp() {
         'export:Export a public key (armored or PQP format)'
         'remove-key:Remove a public key from the keyring' \
 'purge-keys:Remove all keys from the keyring'
+        'edit-key:Edit an existing key'\''s metadata and/or passphrase'
         'import:Import a public key'
     )
 
@@ -56,6 +57,9 @@ _pqp() {
             ;;
         export)
             _pqp_export
+            ;;
+        edit-key)
+            _pqp_edit_key
             ;;
         remove-key)
             _pqp_remove_key
@@ -127,6 +131,18 @@ _pqp_export() {
         '(-o --output)'{-o,--output}'[Output file path]:output file:_files' \
         '--format[Output format]:format:(armor pqp)' \
         '--compress[Compression for PQP format]:compress:(none zstd gzip bzip2 lzma)' \
+        ':key ID or user ID:'
+}
+
+_pqp_edit_key() {
+    _arguments \
+        '(-u --user)'{-u,--user}'[New user ID for the key]:user ID:' \
+        '--expiration-date[New expiration date]:expiration:' \
+        '--encoding[New encoding for armored output]:encoding:(BASE64 ASCII85)' \
+        '--compress[New default compression algorithm]:compress:(none zstd gzip bzip2 lzma)' \
+        '--passphrase[Change the key passphrase]' \
+        '--no-passphrase[Set empty passphrase]' \
+        '--metadata[Add key metadata as key=value (repeatable)]:metadata:' \
         ':key ID or user ID:'
 }
 

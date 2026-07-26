@@ -344,6 +344,49 @@ Skip the confirmation prompt before removing keys.
 \fB\-\-remove\-private\-keys\fR
 Also remove private keys if they exist.
 
+.SS edit\-key
+Edit an existing key's metadata and/or passphrase.
+.PP
+.B pqp edit\-key [\fI\,OPTIONS\/\fR] \fI\,KEY_ID\/\fR
+.PP
+Modifies the user ID, expiration date, encoding, compression, metadata,
+or passphrase of an existing key.  The key is identified by its 16-hex-digit
+key ID or by its user ID string.  Only explicitly provided flags are changed;
+other fields are left untouched.
+.TP
+\fI\,KEY_ID\/\fR
+Key ID (16 hex characters) or user ID of the key to edit.
+.TP
+\fB\-u\fR, \fB\-\-user\fR \fI\,USER\/\fR
+New user ID for the key.  Overwrites the existing user ID.
+.TP
+\fB\-\-expiration\-date\fR \fI\,DATE\/\fR
+New expiration date.  Same syntax as gen-key \(oq\-\-expiration-date\(cq:
+relative (\(oq5y\(cq, \(oq30d\(cq, \(oq12m\(cq) or absolute (\(oq2030-12-31\(cq).
+.TP
+\fB\-\-encoding\fR \fI\,ENC\/\fR
+New encoding for armored output: BASE64 or ASCII85.
+.TP
+\fB\-\-compress\fR \fI\,ALGO\/\fR
+New default compression algorithm stored in key metadata: none, zstd,
+gzip, bzip2, or lzma.
+.TP
+\fB\-\-passphrase\fR
+Change the key passphrase.  Prompts for the current passphrase, the new
+passphrase, and a confirmation.  The secret key is decrypted with the
+old passphrase and re-encrypted with the new one.
+.TP
+\fB\-\-no\-passphrase\fR
+Remove the passphrase (set to empty).  Prompts for the current passphrase,
+then re-encrypts the secret key with an empty passphrase.
+.TP
+\fB\-\-metadata\fR \fI\,KEY\fR\fB=\fR\fI\,VALUE\/\fR
+Add a metadata key=value entry to the key (repeatable).  New entries are
+appended to any existing metadata, never overwritten.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help information for this command.
+
 .SS import
 Import a public key from an armored file, PQP format, or URL.
 .PP

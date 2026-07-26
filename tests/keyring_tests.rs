@@ -1178,3 +1178,212 @@ fn test_cli_export_pqp_with_compression() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn test_edit_key_user_id() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "old@example.com",
+        "testpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let updated = pqp::keyring::edit_key(
+        &meta.key_id,
+        Some("new@example.com".to_string()),
+        None,
+        None,
+        None,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    assert_eq!(updated.user_id, "new@example.com");
+    // Reload from disk
+    let from_disk = pqp::keyring::read_metadata(&meta.key_id).unwrap();
+    assert_eq!(from_disk.user_id, "new@example.com");
+}
+
+#[test]
+fn test_edit_key_metadata() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "meta@example.com",
+        "testpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let entries = vec![pqp::keyring::MetadataEntry {
+        key: "department".to_string(),
+        value: "engineering".to_string(),
+    }];
+
+    let updated =
+        pqp::keyring::edit_key(&meta.key_id, None, None, None, None, None, entries).unwrap();
+    assert_eq!(updated.metadata.len(), 1);
+    assert_eq!(updated.metadata[0].key, "department");
+    assert_eq!(updated.metadata[0].value, "engineering");
+
+    // Appending another entry
+    let entries2 = vec![pqp::keyring::MetadataEntry {
+        key: "role".to_string(),
+        value: "admin".to_string(),
+    }];
+    let updated2 =
+        pqp::keyring::edit_key(&meta.key_id, None, None, None, None, None, entries2).unwrap();
+    assert_eq!(updated2.metadata.len(), 2);
+}
+
+#[test]
+fn test_edit_key_encoding() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "enc@example.com",
+        "testpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let updated = pqp::keyring::edit_key(
+        &meta.key_id,
+        None,
+        None,
+        Some(Encoding::Ascii85),
+        None,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(updated.encoding_algorithm, "ASCII85");
+}
+
+#[test]
+fn test_edit_key_expiration() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "exp@example.com",
+        "testpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let updated = pqp::keyring::edit_key(
+        &meta.key_id,
+        None,
+        Some("30d".to_string()),
+        None,
+        None,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(
+        updated.expiration_date.contains("2026-08-28")
+            || updated.expiration_date.contains("2026-08-29")
+    );
+}
+
+#[test]
+fn test_edit_key_passphrase_change() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "pp@example.com",
+        "oldpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let _updated = pqp::keyring::edit_key(
+        &meta.key_id,
+        None,
+        None,
+        None,
+        None,
+        Some(("oldpass".to_string(), "newpass".to_string())),
+        Vec::new(),
+    )
+    .unwrap();
+
+    // Secret key should now be decryptable with new passphrase
+    let (kem_sk, sign_sk, _, _) = pqp::keyring::load_secret_key(&meta.key_id, "newpass").unwrap();
+    assert!(!kem_sk.is_empty());
+    assert!(!sign_sk.is_empty());
+}
+
+#[test]
+fn test_edit_key_passphrase_remove() {
+    let _k = common::TestKeyring::new();
+    let meta = pqp::keyring::generate_key(
+        "rmpp@example.com",
+        "oldpass",
+        KemVariant::MlKem768,
+        DsaVariant::MlDsa65,
+        Encoding::Base64,
+        "none",
+        "5y",
+        Vec::new(),
+        pqp::crypto::sym::DEFAULT_ARGON2_MEM,
+        pqp::crypto::sym::DEFAULT_ARGON2_TIME,
+        pqp::crypto::sym::DEFAULT_ARGON2_PAR,
+    )
+    .unwrap();
+
+    let _updated = pqp::keyring::edit_key(
+        &meta.key_id,
+        None,
+        None,
+        None,
+        None,
+        Some(("oldpass".to_string(), String::new())),
+        Vec::new(),
+    )
+    .unwrap();
+
+    // Secret key should now be decryptable with empty passphrase
+    let (kem_sk, sign_sk, _, _) = pqp::keyring::load_secret_key(&meta.key_id, "").unwrap();
+    assert!(!kem_sk.is_empty());
+    assert!(!sign_sk.is_empty());
+}

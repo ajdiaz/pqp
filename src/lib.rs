@@ -25,6 +25,7 @@
 //! | [`verify`](cli::Commands::Verify) | Verify a signature |
 //! | [`export`](cli::Commands::Export) | Export a public key (armored) |
 //! | [`import`](cli::Commands::Import) | Import a public key (armored) |
+//! | [`edit-key`](cli::Commands::EditKey) | Edit an existing key's metadata and/or passphrase |
 //! | [`remove-key`](cli::Commands::RemoveKey) | Remove a public (and optionally private) key |
 //! | [`purge-keys`](cli::Commands::PurgeKeys) | Remove all keys from the keyring |
 //!
@@ -56,6 +57,10 @@
 //! | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd best speed/ratio, lzma best ratio/slowest |
 //! | `[export]` | `format` | `armor`, `pqp` | `pqp` | pqp self-describing, armor universal pasteable |
 //! | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | only for PQP format |
+//! | `[edit-key]` | `user` | any string | (none) | new user ID for the key |
+//! | `[edit-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | (none) | relative or absolute |
+//! | `[edit-key]` | `encoding` | `BASE64`, `ASCII85` | (none) | new encoding for armored output |
+//! | `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 //! | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location |
 //!
 //! Example `~/.config/pqp/pqp.toml`:
@@ -187,6 +192,19 @@
 //! |---|---|
 //! | `--no-ask-confirmation` | Skip the confirmation prompt before removing keys |
 //! | `--remove-private-keys` | Also remove private keys if they exist |
+//!
+//! ### `edit-key`
+//! `pqp edit-key [--user <user>] [--expiration-date <date>] [--encoding <enc>] [--compress <algo>] [--passphrase] [--no-passphrase] [--metadata <key=value>]... <key-id>`
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `--user` / `-u` | New user ID for the key |
+//! | `--expiration-date` | New expiration date (relative or absolute) |
+//! | `--encoding` | New encoding: `BASE64` or `ASCII85` |
+//! | `--compress` | New compression algorithm: none, zstd, gzip, bzip2, lzma |
+//! | `--passphrase` | Change the key's passphrase (prompts for old and new) |
+//! | `--no-passphrase` | Set empty passphrase (prompts for old passphrase) |
+//! | `--metadata` | Add metadata as `key=value` pairs (repeatable, appended) |
 //!
 //! # Key storage
 //!

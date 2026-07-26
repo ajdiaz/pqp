@@ -122,6 +122,10 @@ pqp import --url https://keys.example.com/bob.pqp.asc
 pqp import --force key.pqp.pub                        # Override key with same fingerprint
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
+pqp edit-key a1b2c3d4e5f6a7b8 --user "alice@newdomain.com" --encoding ASCII85 --metadata department=engineering
+pqp edit-key alice@example.com --expiration-date 2y           # Extend key by 2 years
+pqp edit-key a1b2c3d4e5f6a7b8 --passphrase                   # Prompts for old + new passphrase
+pqp edit-key a1b2c3d4e5f6a7b8 --no-passphrase                # Remove passphrase (prompts for current)
 pqp purge-keys                                                 # Remove all public keys (asks confirmation)
 pqp purge-keys --no-ask-confirmation                           # Remove all public keys (no prompt)
 pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys including private
@@ -143,6 +147,7 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 | `import` | Import a public key (armored or PQP) |
 | `remove-key` | Remove a public (and optionally private) key |
 | `purge-keys` | Remove all keys from the keyring |
+| `edit-key` | Edit an existing key's metadata and/or passphrase |
 
 ### 🌐 Global flags
 
@@ -185,6 +190,10 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[encrypt]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | zstd = best speed/ratio, lzma = best ratio/slowest, none = raw |
 | `[export]` | `format` | `armor`, `pqp` | `pqp` | pqp = self-describing & compact, armor = universal pasteable |
 | `[export]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `zstd` | Only for PQP format; same trade-offs as encrypt |
+| `[edit-key]` | `user` | any string | (none) | new user ID for the key |
+| `[edit-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | (none) | relative or absolute |
+| `[edit-key]` | `encoding` | `BASE64`, `ASCII85` | (none) | new encoding for armored output |
+| `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location (XDG / PQP_HOME) |
 
 Example with non-default choices:
@@ -204,6 +213,10 @@ compress = "lzma"      # Best compression, slowest
 [export]
 format = "pqp"         # Self-describing format
 compress = "none"      # No compression on export
+
+[edit-key]
+encoding = "ASCII85"   # Default encoding when editing
+compress = "zstd"      # Default compression when editing
 ```
 
 A fully commented sample with detailed pros/cons for every value is at [`pqp.toml.sample`](pqp.toml.sample).
@@ -244,6 +257,8 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 **remove-key:** `<key-id>` · `--dont-ask` · `--remove-private-key`
 
 **purge-keys:** `--no-ask-confirmation` · `--remove-private-keys`
+
+**edit-key:** `<key-id>` · `--user` · `--expiration-date` · `--encoding` · `--compress` · `--passphrase` · `--no-passphrase` · `--metadata`
 
 ---
 

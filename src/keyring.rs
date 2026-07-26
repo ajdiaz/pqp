@@ -974,6 +974,83 @@ pub fn purge_keys(remove_private: bool) -> Result<usize> {
     Ok(count)
 }
 
+/// Edit an existing key's metadata and/or passphrase.
+///
+/// Allows changing the user ID, expiration date, encoding, compression
+/// algorithm, metadata entries, and/or passphrase for an existing key.
+/// The key is identified by its key ID or user ID.
+///
+/// When `new_passphrase` is `Some((old, new))`, the secret key is
+/// decrypted with `old` and re-encrypted with `new`. When `None`,
+/// the secret key is left unchanged. Pass `("".to_string(), "".to_string())`
+/// for `--no-passphrase` (empty passphrase).
+///
+/// New metadata entries are appended to existing ones (not replaced).
+///
+/// Returns the updated [`KeyMetadata`] on success.
+pub fn edit_key(
+    key_id: &str,
+    new_user_id: Option<String>,
+    new_expiration_date: Option<String>,
+    new_encoding: Option<Encoding>,
+    new_compress: Option<String>,
+    new_passphrase: Option<(String, String)>,
+    add_metadata: Vec<MetadataEntry>,
+) -> Result<KeyMetadata> {
+    let resolved = resolve_key_id(key_id)?;
+    let mut meta = read_metadata(&resolved)?;
+
+    if let Some(user_id) = new_user_id {
+        meta.user_id = user_id;
+    }
+    if let Some(exp_date) = new_expiration_date {
+        meta.expiration_date = expiry::parse_expiration(&exp_date)?;
+    }
+    if let Some(encoding) = new_encoding {
+        meta.encoding_algorithm = encoding.as_str().into();
+    }
+    if let Some(compress) = new_compress {
+        meta.compress_algorithm = compress;
+    }
+
+    for entry in add_metadata {
+        meta.metadata.push(entry);
+    }
+
+    if let Some((old_passphrase, new_passphrase)) = new_passphrase {
+        let (kem_sk, sign_sk, _, _) = load_secret_key(&resolved, &old_passphrase)?;
+        let secret_bytes = [kem_sk.as_slice(), sign_sk.as_slice()].concat();
+
+        let salt = generate_salt()?;
+        let wrapping_key = sym::derive_key(
+            &new_passphrase,
+            &salt,
+            meta.argon2_mem,
+            meta.argon2_time,
+            meta.argon2_par,
+        )?;
+        let (nonce, encrypted_secret) = sym::encrypt(&wrapping_key, &secret_bytes)?;
+
+        let mut wrapped = Vec::new();
+        wrapped.extend_from_slice(&salt);
+        wrapped.extend_from_slice(&nonce);
+        wrapped.extend_from_slice(&encrypted_secret);
+
+        let dir = keys_dir()?.join(&resolved);
+        let secret_path = dir.join("pqp-secret.der");
+        std::fs::write(&secret_path, &wrapped).context("writing re-encrypted secret key")?;
+        std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
+    }
+
+    let dir = keys_dir()?.join(&resolved);
+    let conf_path = dir.join("pqp.conf");
+    let conf_toml = toml::to_string_pretty(&meta)?;
+    std::fs::write(&conf_path, &conf_toml).context("writing updated key config")?;
+    std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
+
+    Ok(meta)
+}
+
 /// Check whether a key is expired based on its stored metadata.
 ///
 /// Returns `None` if the metadata cannot be read or has no valid

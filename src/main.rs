@@ -858,6 +858,107 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::EditKey {
+            key_id,
+            user,
+            expiration_date,
+            encoding,
+            compress,
+            passphrase,
+            no_passphrase,
+            metadata,
+        } => {
+            if cli.dry_run {
+                eprintln!("[dry-run] would edit-key: no action taken");
+                return Ok(());
+            }
+            let cmd_cfg = config::section(&cfg, "edit-key");
+            let user = user.or_else(|| {
+                cmd_cfg
+                    .and_then(|s| s.get("user"))
+                    .and_then(|v| v.as_str().map(String::from))
+            });
+            let expiration_date = expiration_date.or_else(|| {
+                cmd_cfg
+                    .and_then(|s| s.get("expiration-date"))
+                    .and_then(|v| v.as_str().map(String::from))
+            });
+            let encoding = encoding.or_else(|| {
+                cmd_cfg
+                    .and_then(|s| s.get("encoding"))
+                    .and_then(|v| v.as_str().map(String::from))
+            });
+            let compress = compress.or_else(|| {
+                cmd_cfg
+                    .and_then(|s| s.get("compress"))
+                    .and_then(|v| v.as_str().map(String::from))
+            });
+
+            if passphrase && no_passphrase {
+                anyhow::bail!("--passphrase and --no-passphrase are mutually exclusive");
+            }
+
+            let new_passphrase: Option<(String, String)> = if no_passphrase {
+                let old = read_passphrase("Enter current passphrase for key: ")?;
+                Some((old, String::new()))
+            } else if passphrase {
+                let old = read_passphrase("Enter current passphrase for key: ")?;
+                let new_p = read_passphrase("Enter new passphrase for key: ")?;
+                let new_p2 = read_passphrase("Confirm new passphrase: ")?;
+                if new_p != new_p2 {
+                    return Err(anyhow::anyhow!("passphrases do not match"));
+                }
+                Some((old, new_p))
+            } else {
+                None
+            };
+
+            let encoding = match encoding {
+                Some(ref e) => {
+                    Some(Encoding::parse(e).with_context(|| format!("unknown encoding: {}", e))?)
+                }
+                None => None,
+            };
+
+            let metadata_entries: Vec<keyring::MetadataEntry> = metadata
+                .iter()
+                .filter_map(|s| {
+                    let mut parts = s.splitn(2, '=');
+                    let k = parts.next()?;
+                    let v = parts.next().unwrap_or("");
+                    if k.is_empty() {
+                        None
+                    } else {
+                        Some(keyring::MetadataEntry {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        })
+                    }
+                })
+                .collect();
+
+            let meta = keyring::edit_key(
+                &key_id,
+                user,
+                expiration_date,
+                encoding,
+                compress,
+                new_passphrase,
+                metadata_entries,
+            )?;
+
+            println!("Edited key: key-id={}", meta.key_id);
+            println!("  user-id: {}", meta.user_id);
+            println!("  expires: {}", meta.expiration_date);
+            println!("  encoding: {}", meta.encoding_algorithm);
+            println!("  compress: {}", meta.compress_algorithm);
+            for entry in &meta.metadata {
+                println!("  {}: {}", entry.key, entry.value);
+            }
+            if passphrase || no_passphrase {
+                println!("  passphrase: changed");
+            }
+        }
         Commands::Import {
             input,
             url,

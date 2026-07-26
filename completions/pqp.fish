@@ -83,6 +83,18 @@ complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l no-ask-confirm
 complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l remove-private-keys -d "Also remove private keys"
 complete -c pqp -f -n "__fish_seen_subcommand_from purge-keys" -l help -d "Print help"
 
+# --- edit-key ---
+complete -c pqp -f -n "__fish_use_subcommand" -a edit-key -d "Edit an existing key's metadata and/or passphrase"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -s u -l user -d "New user ID for the key" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l expiration-date -d "New expiration date" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l encoding -d "New encoding for armored output" -r -xa "BASE64 ASCII85"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l compress -d "New default compression algorithm" -r -xa "none zstd gzip bzip2 lzma"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l passphrase -d "Change the key passphrase"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l no-passphrase -d "Set empty passphrase"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l metadata -d "Add key metadata as key=value (repeatable)" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -l help -d "Print help"
+complete -c pqp -f -n "__fish_seen_subcommand_from edit-key" -a "(__pqp_complete_keys)" -d "Key ID or user ID"
+
 # --- import ---
 complete -c pqp -f -n "__fish_use_subcommand" -a import -d "Import a public key"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l url -d "URL to fetch the armored key from" -r

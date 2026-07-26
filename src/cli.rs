@@ -211,6 +211,41 @@ pub enum Commands {
         )]
         remove_private_keys: bool,
     },
+    /// Edit an existing key's metadata and/or passphrase.
+    #[command(name = "edit-key")]
+    EditKey {
+        #[arg(help = "Key ID or user ID to edit")]
+        key_id: String,
+        #[arg(short = 'u', long = "user", help = "New user ID for the key")]
+        user: Option<String>,
+        #[arg(
+            long = "expiration-date",
+            help = "New expiration date: <N>y, <N>m, <N>d, or YYYY-MM-DD"
+        )]
+        expiration_date: Option<String>,
+        #[arg(
+            long = "encoding",
+            help = "New encoding for armored output: BASE64, ASCII85"
+        )]
+        encoding: Option<String>,
+        #[arg(
+            long = "compress",
+            help = "New default compression algorithm: none, zstd, gzip, bzip2, lzma"
+        )]
+        compress: Option<String>,
+        #[arg(
+            long = "passphrase",
+            help = "Change the key passphrase (prompts for old and new)"
+        )]
+        passphrase: bool,
+        #[arg(
+            long = "no-passphrase",
+            help = "Remove or set an empty passphrase (no prompt)"
+        )]
+        no_passphrase: bool,
+        #[arg(long = "metadata", help = "Add key metadata as key=value (repeatable)")]
+        metadata: Vec<String>,
+    },
     /// Import a public key (armored).
     #[command(name = "import")]
     Import {

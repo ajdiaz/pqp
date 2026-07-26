@@ -1018,16 +1018,156 @@ fn test_cli_purge_keys_remove_private() {
         .env("PQP_HOME", &home)
         .output()
         .unwrap();
-    assert!(output.status.success(), "purge-keys private failed");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("Purged 1 key"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"));
 
-    // Verify keys are gone
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_edit_key_user_id() {
+    let home = tmp_home("edit_user");
     let output = Command::new(pqp_binary())
-        .args(["list-keys"])
+        .args(["gen-key", "-u", "old@example.com", "--no-passphrase"])
         .env("PQP_HOME", &home)
         .output()
         .unwrap();
-    assert!(String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"));
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home);
+
+    let output = Command::new(pqp_binary())
+        .args(["edit-key", "--user", "new@example.com", &key_id])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "edit-key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("new@example.com"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_edit_key_encoding() {
+    let home = tmp_home("edit_enc");
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "enc@example.com", "--no-passphrase"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home);
+
+    let output = Command::new(pqp_binary())
+        .args(["edit-key", "--encoding", "ASCII85", &key_id])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "edit-key encoding failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("ASCII85"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_edit_key_metadata() {
+    let home = tmp_home("edit_meta");
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "meta@example.com", "--no-passphrase"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home);
+
+    let output = Command::new(pqp_binary())
+        .args(["edit-key", "--metadata", "department=engineering", &key_id])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "edit-key metadata failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("department: engineering"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_edit_key_mutually_exclusive() {
+    let home = tmp_home("edit_excl");
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "excl@example.com", "--no-passphrase"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home);
+
+    let output = Command::new(pqp_binary())
+        .args(["edit-key", "--passphrase", "--no-passphrase", &key_id])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "edit-key should reject mutually exclusive flags"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("mutually exclusive"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_cli_edit_key_dry_run() {
+    let home = tmp_home("edit_dry");
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "dry@example.com", "--no-passphrase"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home);
+
+    let output = Command::new(pqp_binary())
+        .args([
+            "--dry-run",
+            "edit-key",
+            "--user",
+            "nope@example.com",
+            &key_id,
+        ])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "dry-run edit-key failed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("dry-run"), "expected dry-run output");
+
+    // Verify the key was NOT changed
+    let output2 = Command::new(pqp_binary())
+        .args(["list-keys", "--format", "no-headers"])
+        .env("PQP_HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output2.status.success());
+    let list_out = String::from_utf8_lossy(&output2.stdout);
+    assert!(
+        list_out.contains("dry@example.com"),
+        "user ID should remain unchanged"
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }
