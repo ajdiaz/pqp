@@ -260,6 +260,8 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 
 **edit-key:** `<key-id>` · `--user` · `--expiration-date` · `--encoding` · `--compress` · `--passphrase` · `--no-passphrase` · `--metadata`
 
+> ⚠️ **Warning:** `edit-key` only modifies the key stored in the **local keyring**. If the same key was exported, uploaded to a key server, or exists in another keyring, those copies are **not** modified. Re-export and redistribute the key after editing. 
+
 ---
 
 ## 📁 File Format

@@ -353,6 +353,11 @@ Modifies the user ID, expiration date, encoding, compression, metadata,
 or passphrase of an existing key.  The key is identified by its 16-hex-digit
 key ID or by its user ID string.  Only explicitly provided flags are changed;
 other fields are left untouched.
+.PP
+\fB⚠️  Warning:\fR \fBedit-key\fR only modifies the key stored in the \fBlocal keyring\fR.
+If the same key was exported, uploaded to a key server, or exists in another
+keyring, those copies are \fBnot\fR modified.  Re-export and redistribute the
+key after editing.
 .TP
 \fI\,KEY_ID\/\fR
 Key ID (16 hex characters) or user ID of the key to edit.
