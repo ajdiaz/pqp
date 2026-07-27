@@ -150,12 +150,13 @@ metadata = []
 # Changing them only affects newly generated keys.
 #
 # Possible values:
-#   argon2-mem = <N>  — Memory cost in KiB [default: 19456 ~= 19 MiB].
+#   argon2-mem = <N>  — Memory cost in KiB [default: 65536 ~= 64 MiB].
 #                       Range: 8 to 2^31-1. Higher = more resistant
 #                       to GPU/ASIC brute-force but uses more RAM.
-#                       19456 is the libargon2 recommended minimum.
+#                       65536 (64 MiB) is the OWASP recommended minimum
+#                       for passphrase-based key encryption.
 #
-#   argon2-time = <N> — Time cost (iterations) [default: 2].
+#   argon2-time = <N> — Time cost (iterations) [default: 3].
 #                       Range: 1 to 2^32-1. Higher = slower derivation,
 #                       linearly more work per guess.
 #
@@ -164,10 +165,12 @@ metadata = []
 #                       but less memory-hard per thread.
 #
 # Security guidance:
-#   For high-security environments, consider argon2-mem = 65536 (64 MiB)
-#   and argon2-time = 3. For low-power devices, keep defaults.
-argon2-mem = 19456
-argon2-time = 2
+#   For low-power devices, consider argon2-mem = 19456 and argon2-time = 2
+#   (the previous defaults). For high-security environments, increase
+#   further. Higher values provide more brute-force resistance at the
+#   cost of slower key operations.
+argon2-mem = 65536
+argon2-time = 3
 argon2-par = 1
 
 # ── list-keys ──────────────────────────────────────────────────────────

@@ -48,8 +48,8 @@
 //! | `[gen-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | `none` | stored as per-key default, commands use own default unless set |
 //! | `[gen-key]` | `expiration-date` | `5y`, `30d`, `2030-12-31`, etc | `5y` | relative or absolute; also `1y`, `12m`, `90d` |
 //! | `[gen-key]` | `metadata` | arbitrary `key=value` pairs | (none) | stored in pqp.conf and armor headers; not interpreted |
-//! | `[gen-key]` | `argon2-mem` | KiB (`19456`, `65536`, etc) | `19456` | higher = more brute-force resistance, more RAM |
-//! | `[gen-key]` | `argon2-time` | iterations (`2`, `3`, etc) | `2` | higher = slower, more work per guess |
+//! | `[gen-key]` | `argon2-mem` | KiB (`65536`, `19456`, etc) | `65536` | higher = more brute-force resistance, more RAM |
+//! | `[gen-key]` | `argon2-time` | iterations (`3`, `2`, etc) | `3` | higher = slower, more work per guess |
 //! | `[gen-key]` | `argon2-par` | threads (`1`, `4`, etc) | `1` | higher = faster on multi-core |
 //! | `[encrypt]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
 //! | `[sign]` | `allow-expired` | `true`, `false` | `false` | if true, warn but proceed with expired keys |
@@ -94,8 +94,8 @@
 //! | `--compress` | Default compression preference: `none` (default), `zstd`, `gzip`, `bzip2`, `lzma` |
 //! | `--expiration-date` | Key expiration: `<N>y` (default: `5y`), `<N>m`, `<N>d`, or `YYYY-MM-DD` |
 //! | `--metadata` | Key metadata as `key=value` pairs (repeatable) |
-//! | `--argon2-mem` | Argon2id memory cost in KiB (default: `19456` ~19 MiB) |
-//! | `--argon2-time` | Argon2id time cost / iterations (default: `2`) |
+//! | `--argon2-mem` | Argon2id memory cost in KiB (default: `65536` ~64 MiB) |
+//! | `--argon2-time` | Argon2id time cost / iterations (default: `3`) |
 //! | `--argon2-par` | Argon2id parallelism / threads (default: `1`) |
 //!
 //! ### `list-keys`
