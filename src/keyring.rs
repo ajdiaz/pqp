@@ -360,7 +360,9 @@ pub fn generate_key(
     let dir = keys_dir()?.join(&key_id);
     std::fs::create_dir_all(&dir).context("creating key directory")?;
 
-    std::fs::write(dir.join("pqp-public.der"), &public_bytes).context("writing public key")?;
+    let pub_path = dir.join("pqp-public.der");
+    write_atomic(&pub_path, &public_bytes).context("writing public key")?;
+    std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
     let secret_bytes = [
         keypair.kem_secret.as_bytes(),
@@ -377,12 +379,13 @@ pub fn generate_key(
     wrapped.extend_from_slice(&encrypted_secret);
 
     let secret_path = dir.join("pqp-secret.der");
-    std::fs::write(&secret_path, &wrapped).context("writing secret key")?;
+    write_atomic(&secret_path, &wrapped).context("writing secret key")?;
     std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
 
     let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta).context("serializing key metadata")?;
-    std::fs::write(&conf_path, &conf_toml).context("writing key config")?;
+    write_atomic(&conf_path, conf_toml.as_bytes()).context("writing key config")?;
+
     std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
@@ -655,7 +658,7 @@ pub fn import_public_key_from_pqp(data: &str, force_override: bool) -> Result<St
                 }
 
                 let pub_path = dir.join("pqp-public.der");
-                std::fs::write(&pub_path, &key_bytes)?;
+                write_atomic(&pub_path, &key_bytes)?;
                 std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
                 let meta = KeyMetadata {
@@ -675,7 +678,7 @@ pub fn import_public_key_from_pqp(data: &str, force_override: bool) -> Result<St
                 };
                 let conf_path = dir.join("pqp.conf");
                 let conf_toml = toml::to_string_pretty(&meta)?;
-                std::fs::write(&conf_path, &conf_toml)?;
+                write_atomic(&conf_path, conf_toml.as_bytes())?;
                 std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
                 std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
@@ -705,7 +708,7 @@ pub fn import_public_key_from_pqp(data: &str, force_override: bool) -> Result<St
     std::fs::create_dir_all(&dir).context("creating key directory for import")?;
 
     let pub_path = dir.join("pqp-public.der");
-    std::fs::write(&pub_path, &key_bytes)?;
+    write_atomic(&pub_path, &key_bytes)?;
     std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
     // Use exported metadata fields, but always generate a fresh key_id
@@ -726,7 +729,7 @@ pub fn import_public_key_from_pqp(data: &str, force_override: bool) -> Result<St
     };
     let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta)?;
-    std::fs::write(&conf_path, &conf_toml)?;
+    write_atomic(&conf_path, conf_toml.as_bytes())?;
     std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
@@ -795,6 +798,20 @@ pub fn import_public_key(armored: &str, force_override: bool) -> Result<String> 
         }
     }
 
+    // Validate decoded public key length against KEM/DSA variants
+    let kem_variant_armor = KemVariant::parse(&kem_algorithm)
+        .context(format!("unknown KEM algorithm: {}", kem_algorithm))?;
+    let dsa_variant_armor = DsaVariant::parse(&sign_algorithm)
+        .context(format!("unknown sign algorithm: {}", sign_algorithm))?;
+    let expected_len = kem_variant_armor.public_key_len() + dsa_variant_armor.public_key_len();
+    if decoded.len() != expected_len {
+        anyhow::bail!(
+            "public key data length mismatch: got {}, expected {} (KEM + DSA)",
+            decoded.len(),
+            expected_len
+        );
+    }
+
     // Check for fingerprint collision
     if !fingerprint.is_empty() {
         if let Some(existing_id) = find_key_by_fingerprint(&fingerprint)? {
@@ -822,11 +839,11 @@ pub fn import_public_key(armored: &str, force_override: bool) -> Result<String> 
                     fingerprint: fingerprint.clone(),
                 };
                 let conf_toml = toml::to_string_pretty(&meta)?;
-                std::fs::write(&metadata_path, &conf_toml)?;
+                write_atomic(&metadata_path, conf_toml.as_bytes())?;
                 std::fs::set_permissions(&metadata_path, std::fs::Permissions::from_mode(0o600))?;
 
                 let pub_path = dir.join("pqp-public.der");
-                std::fs::write(&pub_path, &decoded)?;
+                write_atomic(&pub_path, &decoded)?;
                 std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
                 return Ok(existing_id);
@@ -849,30 +866,28 @@ pub fn import_public_key(armored: &str, force_override: bool) -> Result<String> 
 
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 
+    let meta = KeyMetadata {
+        key_id: key_id.clone(),
+        created_at,
+        user_id,
+        kem_algorithm,
+        sign_algorithm,
+        encoding_algorithm,
+        compress_algorithm,
+        expiration_date,
+        metadata: user_metadata,
+        argon2_mem,
+        argon2_time,
+        argon2_par,
+        fingerprint,
+    };
     let metadata_path = dir.join("pqp.conf");
-    if !metadata_path.exists() {
-        let meta = KeyMetadata {
-            key_id: key_id.clone(),
-            created_at,
-            user_id,
-            kem_algorithm,
-            sign_algorithm,
-            encoding_algorithm,
-            compress_algorithm,
-            expiration_date,
-            metadata: user_metadata,
-            argon2_mem,
-            argon2_time,
-            argon2_par,
-            fingerprint,
-        };
-        let conf_toml = toml::to_string_pretty(&meta)?;
-        std::fs::write(&metadata_path, &conf_toml)?;
-        std::fs::set_permissions(&metadata_path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    let conf_toml = toml::to_string_pretty(&meta)?;
+    write_atomic(&metadata_path, conf_toml.as_bytes())?;
+    std::fs::set_permissions(&metadata_path, std::fs::Permissions::from_mode(0o600))?;
 
     let pub_path = dir.join("pqp-public.der");
-    std::fs::write(&pub_path, &decoded)?;
+    write_atomic(&pub_path, &decoded)?;
     std::fs::set_permissions(&pub_path, std::fs::Permissions::from_mode(0o644))?;
 
     Ok(key_id)
@@ -1018,8 +1033,10 @@ pub fn edit_key(
     }
 
     if let Some((old_passphrase, new_passphrase)) = new_passphrase {
-        let (kem_sk, sign_sk, _, _) = load_secret_key(&resolved, &old_passphrase)?;
-        let secret_bytes = [kem_sk.as_slice(), sign_sk.as_slice()].concat();
+        let (mut kem_sk, mut sign_sk, _, _) = load_secret_key(&resolved, &old_passphrase)?;
+        let mut secret_bytes = [kem_sk.as_slice(), sign_sk.as_slice()].concat();
+        kem_sk.zeroize();
+        sign_sk.zeroize();
 
         let salt = generate_salt()?;
         let wrapping_key = sym::derive_key(
@@ -1030,6 +1047,7 @@ pub fn edit_key(
             meta.argon2_par,
         )?;
         let (nonce, encrypted_secret) = sym::encrypt(&wrapping_key, &secret_bytes)?;
+        secret_bytes.zeroize();
 
         let mut wrapped = Vec::new();
         wrapped.extend_from_slice(&salt);
@@ -1038,14 +1056,19 @@ pub fn edit_key(
 
         let dir = keys_dir()?.join(&resolved);
         let secret_path = dir.join("pqp-secret.der");
-        std::fs::write(&secret_path, &wrapped).context("writing re-encrypted secret key")?;
+        write_atomic(&secret_path, &wrapped).context("writing re-encrypted secret key")?;
         std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
+
+        let mut old_bytes = old_passphrase.into_bytes();
+        old_bytes.zeroize();
+        let mut new_bytes = new_passphrase.into_bytes();
+        new_bytes.zeroize();
     }
 
     let dir = keys_dir()?.join(&resolved);
     let conf_path = dir.join("pqp.conf");
     let conf_toml = toml::to_string_pretty(&meta)?;
-    std::fs::write(&conf_path, &conf_toml).context("writing updated key config")?;
+    write_atomic(&conf_path, conf_toml.as_bytes()).context("writing updated key config")?;
     std::fs::set_permissions(&conf_path, std::fs::Permissions::from_mode(0o600))?;
 
     Ok(meta)
@@ -1093,4 +1116,11 @@ fn generate_salt() -> Result<[u8; 16]> {
     use rand::RngCore;
     rand::rngs::OsRng.fill_bytes(&mut salt);
     Ok(salt)
+}
+
+fn write_atomic(path: &std::path::Path, data: &[u8]) -> Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, data).context(format!("writing {}", tmp_path.display()))?;
+    std::fs::rename(&tmp_path, path).context(format!("renaming to {}", path.display()))?;
+    Ok(())
 }

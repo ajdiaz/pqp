@@ -18,6 +18,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use zeroize::Zeroize;
 
+const MAX_INPUT_SIZE: u64 = 100 * 1024 * 1024; // 100 MiB
+
 fn read_passphrase(prompt: &str) -> Result<String> {
     match rpassword::prompt_password(prompt) {
         Ok(p) => Ok(p),
@@ -40,15 +42,28 @@ fn confirm_import(key_id: &str) -> Result<bool> {
 fn read_input(input: &Option<String>) -> Result<Vec<u8>> {
     match input {
         Some(path) if path != "-" => {
-            let mut file = std::fs::File::open(path).context(format!("opening {}", path))?;
-            let mut data = Vec::new();
-            file.read_to_end(&mut data)
+            let file = std::fs::File::open(path).context(format!("opening {}", path))?;
+            let metadata = file
+                .metadata()
+                .context(format!("reading metadata for {}", path))?;
+            if metadata.len() > MAX_INPUT_SIZE {
+                anyhow::bail!(
+                    "input file too large: {} bytes (max {})",
+                    metadata.len(),
+                    MAX_INPUT_SIZE
+                );
+            }
+            let mut data = Vec::with_capacity(metadata.len() as usize);
+            std::io::BufReader::new(file)
+                .take(MAX_INPUT_SIZE)
+                .read_to_end(&mut data)
                 .context(format!("reading {}", path))?;
             Ok(data)
         }
         _ => {
             let mut data = Vec::new();
             std::io::stdin()
+                .take(MAX_INPUT_SIZE)
                 .read_to_end(&mut data)
                 .context("reading from stdin")?;
             Ok(data)
@@ -57,9 +72,21 @@ fn read_input(input: &Option<String>) -> Result<Vec<u8>> {
 }
 
 fn read_file(path: &str) -> Result<Vec<u8>> {
-    let mut file = std::fs::File::open(path).context(format!("opening {}", path))?;
-    let mut data = Vec::new();
-    file.read_to_end(&mut data)
+    let file = std::fs::File::open(path).context(format!("opening {}", path))?;
+    let metadata = file
+        .metadata()
+        .context(format!("reading metadata for {}", path))?;
+    if metadata.len() > MAX_INPUT_SIZE {
+        anyhow::bail!(
+            "input file too large: {} bytes (max {})",
+            metadata.len(),
+            MAX_INPUT_SIZE
+        );
+    }
+    let mut data = Vec::with_capacity(metadata.len() as usize);
+    std::io::BufReader::new(file)
+        .take(MAX_INPUT_SIZE)
+        .read_to_end(&mut data)
         .context(format!("reading {}", path))?;
     Ok(data)
 }

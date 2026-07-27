@@ -112,6 +112,12 @@ fn date_to_days(year: u64, month: u64, day: u64) -> u64 {
 }
 
 /// Check whether an ISO 8601 expiration timestamp is in the past.
+///
+/// **Security note:** This check relies on [`SystemTime::now()`], which is
+/// affected by system clock changes. An attacker who can manipulate the
+/// system clock may bypass expiration checks. This is a documented
+/// limitation of CLI tools — in environments requiring strong expiration
+/// enforcement, consider a hardware-backed trusted time source.
 pub fn is_expired(expiration_date: &str) -> bool {
     if expiration_date == "expired" {
         return true;

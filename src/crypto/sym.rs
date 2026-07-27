@@ -19,10 +19,10 @@ pub const NONCE_LEN: usize = 24;
 #[allow(dead_code)]
 pub const TAG_LEN: usize = 16;
 
-/// Default Argon2id memory cost in KiB (19 MiB).
-pub const DEFAULT_ARGON2_MEM: u32 = 19456;
+/// Default Argon2id memory cost in KiB (64 MiB — OWASP minimum).
+pub const DEFAULT_ARGON2_MEM: u32 = 65536;
 /// Default Argon2id time cost (iterations).
-pub const DEFAULT_ARGON2_TIME: u32 = 2;
+pub const DEFAULT_ARGON2_TIME: u32 = 3;
 /// Default Argon2id parallelism (threads).
 pub const DEFAULT_ARGON2_PAR: u32 = 1;
 
