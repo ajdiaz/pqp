@@ -5,6 +5,7 @@ use pqp::crypto::sign;
 use pqp::crypto::{DsaVariant, KemVariant};
 use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
 
 mod common;
 
@@ -953,17 +954,18 @@ fn test_dry_run_purge_keys() {
 
 #[test]
 fn test_cli_purge_keys_public_only() {
-    let home = tmp_home("purge_pub");
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
     let output = Command::new(pqp_binary())
         .args(["gen-key", "-u", "purge1@example.com", "--no-passphrase"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
     assert!(output.status.success(), "gen-key purge1 failed");
 
     let output = Command::new(pqp_binary())
         .args(["gen-key", "-u", "purge2@example.com", "--no-passphrase"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
     assert!(output.status.success(), "gen-key purge2 failed");
@@ -971,7 +973,7 @@ fn test_cli_purge_keys_public_only() {
     // Confirm we have 2 keys
     let output = Command::new(pqp_binary())
         .args(["list-keys", "--format", "no-headers"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -981,7 +983,7 @@ fn test_cli_purge_keys_public_only() {
     // Purge with --no-ask-confirmation (public only)
     let output = Command::new(pqp_binary())
         .args(["purge-keys", "--no-ask-confirmation"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
     assert!(output.status.success(), "purge-keys failed");
@@ -990,23 +992,22 @@ fn test_cli_purge_keys_public_only() {
     // Verify keys are gone
     let output = Command::new(pqp_binary())
         .args(["list-keys"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
     assert!(String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"));
-
-    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
 fn test_cli_purge_keys_remove_private() {
-    let home = tmp_home("purge_priv");
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
     let output = Command::new(pqp_binary())
         .args(["gen-key", "-u", "purge-priv@example.com", "--no-passphrase"])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
-    assert!(output.status.success(), "gen-key failed");
+    assert!(output.status.success(), "gen-key failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Purge with --remove-private-keys
     let output = Command::new(pqp_binary())
@@ -1015,12 +1016,37 @@ fn test_cli_purge_keys_remove_private() {
             "--no-ask-confirmation",
             "--remove-private-keys",
         ])
-        .env("PQP_HOME", &home)
+        .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
-    assert!(String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"));
+    assert!(
+        output.status.success(),
+        "purge-keys failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Purged"),
+        "purge-keys output: {}",
+        stdout
+    );
 
-    let _ = std::fs::remove_dir_all(&home);
+    // Verify keys are gone via list-keys
+    let output = Command::new(pqp_binary())
+        .args(["list-keys"])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "list-keys failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"),
+        "list-keys after purge: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[test]
