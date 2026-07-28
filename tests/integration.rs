@@ -1007,7 +1007,11 @@ fn test_cli_purge_keys_remove_private() {
         .env("PQP_HOME", &home_path)
         .output()
         .unwrap();
-    assert!(output.status.success(), "gen-key failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "gen-key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Purge with --remove-private-keys
     let output = Command::new(pqp_binary())
@@ -1025,11 +1029,7 @@ fn test_cli_purge_keys_remove_private() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("Purged"),
-        "purge-keys output: {}",
-        stdout
-    );
+    assert!(stdout.contains("Purged"), "purge-keys output: {}", stdout);
 
     // Verify keys are gone via list-keys
     let output = Command::new(pqp_binary())
