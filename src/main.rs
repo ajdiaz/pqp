@@ -98,7 +98,8 @@ fn write_file(path: &str, data: &[u8]) -> Result<()> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let cfg = config::load()?;
+    // Resolve config path: CLI --config > PQP_CONFIG env > default
+    let cfg = config::load_with_override(cli.config.as_ref().map(PathBuf::from))?;
 
     // Resolve keyring path: CLI --keyring-path > KEYRING_PATH env > config [keyring].path > default
     let keyring_path = cli

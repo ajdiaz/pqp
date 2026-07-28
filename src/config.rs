@@ -2,8 +2,13 @@
 //!
 //! Provides defaults for CLI options. Precedence (lowest to highest):
 //! 1. Code-level hardcoded defaults
-//! 2. Config file values in `~/.pqp/pqp.toml`
+//! 2. Config file values (from default path, `PQP_CONFIG` env var, or `--config` flag)
 //! 3. CLI flags passed by the user
+//!
+//! Config file path precedence (lowest to highest):
+//! 1. Default path (`~/.config/pqp/pqp.toml` or legacy `~/.pqp/pqp.toml`)
+//! 2. `PQP_CONFIG` environment variable
+//! 3. `--config` CLI global flag
 //!
 //! The config file mirrors CLI command structure using TOML sections:
 //! ```toml
@@ -28,15 +33,29 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use toml::Value;
 
-/// Path to the configuration file — checks in order:
+/// Resolve the config file path with the given override preference.
+///
+/// Precedence (highest to lowest):
+/// 1. `override_path` (from `--config` CLI flag)
+/// 2. `PQP_CONFIG` environment variable
+/// 3. Default detection via `PQP_HOME`, XDG, or legacy path
+pub fn resolve_path(override_path: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(path) = override_path {
+        return Ok(path);
+    }
+    if let Ok(env_path) = std::env::var("PQP_CONFIG") {
+        return Ok(PathBuf::from(env_path));
+    }
+    default_path()
+}
+
+/// Determine the default config file path — checks in order:
 /// 1. `PQP_HOME` env var → `$PQP_HOME/.pqp/pqp.toml`
 /// 2. XDG config → `~/.config/pqp/pqp.toml`
 /// 3. Legacy fallback → `~/.pqp/pqp.toml`
-fn config_path() -> Result<PathBuf> {
-    // PQP_HOME takes precedence over XDG
+fn default_path() -> Result<PathBuf> {
     if let Ok(pqp_home) = std::env::var("PQP_HOME") {
-        let path = PathBuf::from(pqp_home).join(".pqp").join("pqp.toml");
-        return Ok(path);
+        return Ok(PathBuf::from(pqp_home).join(".pqp").join("pqp.toml"));
     }
     let xdg = crate::util::config_dir()
         .context("cannot determine XDG config directory")?
@@ -55,10 +74,27 @@ fn config_path() -> Result<PathBuf> {
 
 /// Load the config file, returning an empty map if it doesn't exist.
 ///
+/// Uses default path resolution (no override). Equivalent to
+/// `load_with_override(None)`.
+///
 /// Returns a command→option→value mapping. Example:
 /// `{"gen-key": {"kem": "ML-KEM-1024", ...}, "encrypt": {"compress": "gzip"}}`
 pub fn load() -> Result<HashMap<String, HashMap<String, Value>>> {
-    let path = config_path()?;
+    load_with_override(None)
+}
+
+/// Load the config file with an optional override path.
+///
+/// The config path is resolved via `resolve_path(override_path)`. If the
+/// resolved path does not exist, returns an empty map. If the parsed config
+/// contains a top-level `config` key (invalid — would be circular), a warning
+/// is printed to stderr and that key is silently ignored.
+///
+/// `override_path` corresponds to the `--config` CLI flag.
+pub fn load_with_override(
+    override_path: Option<PathBuf>,
+) -> Result<HashMap<String, HashMap<String, Value>>> {
+    let path = resolve_path(override_path)?;
     if !path.exists() {
         return Ok(HashMap::new());
     }
@@ -67,6 +103,13 @@ pub fn load() -> Result<HashMap<String, HashMap<String, Value>>> {
     let mut result: HashMap<String, HashMap<String, Value>> = HashMap::new();
     if let Value::Table(table) = raw {
         for (cmd, opts) in table {
+            if cmd == "config" {
+                eprintln!(
+                    "Warning: 'config' key in {} is ignored (use PQP_CONFIG env or --config flag)",
+                    path.display()
+                );
+                continue;
+            }
             if let Value::Table(opt_table) = opts {
                 let entries: HashMap<String, Value> = opt_table.into_iter().collect();
                 result.insert(cmd, entries);

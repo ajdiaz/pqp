@@ -27,6 +27,14 @@ pub struct Cli {
     )]
     pub keyring_path: Option<String>,
 
+    /// Path to an alternative configuration file.
+    #[arg(
+        long = "config",
+        global = true,
+        help = "Path to an alternative configuration file"
+    )]
+    pub config: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

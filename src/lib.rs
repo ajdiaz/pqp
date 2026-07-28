@@ -35,6 +35,9 @@
 //! back to `~/.pqp/pqp.toml` for backward compatibility. The `PQP_HOME`
 //! environment variable overrides both, using the legacy structure inside
 //! the specified directory (`$PQP_HOME/.pqp/pqp.toml`).
+//! Config file precedence (lowest to highest): code defaults < config file
+//! (default path, or `PQP_CONFIG` env var, or `--config` flag) < CLI flags.
+//! A `[config]` section in the config file is ignored (reserved).
 //! See `pqp.toml.sample` in the source tree for detailed pros/cons of
 //! every value.
 //!
@@ -75,9 +78,19 @@
 //!
 //! # Global flags
 //!
-//! * `--dry-run` / `-n` — print a dry-run message to stderr and exit without action
-//! * `--keyring-path <path>` — use an alternative keyring directory instead of the default
-//!   (also configurable via `KEYRING_PATH` env var or `[keyring].path` in config)
+//! | Flag | Description |
+//! |---|---|
+//! | `--dry-run` / `-n` | Print a dry-run message to stderr and exit without action |
+//! | `--keyring-path <path>` | Use an alternative keyring directory (also via `KEYRING_PATH` env or `[keyring].path` config) |
+//! | `--config <path>` | Path to an alternative configuration file (also via `PQP_CONFIG` env var) |
+//!
+//! # Environment variables
+//!
+//! | Variable | Description |
+//! |---|---|
+//! | `PQP_HOME` | Override XDG and legacy paths, using the legacy structure inside the specified directory |
+//! | `PQP_CONFIG` | Path to an alternative configuration file (takes precedence over default path, overridden by `--config` flag) |
+//! | `KEYRING_PATH` | Path to an alternative keyring directory |
 //!
 //! # Commands in detail
 //!

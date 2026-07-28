@@ -4,6 +4,17 @@
 #
 # To use a value from this file, simply omit the corresponding CLI flag
 # when running pqp. If both are present, the CLI flag wins.
+#
+# ── config path ──────────────────────────────────────────────────────────
+# The configuration file is loaded from (precedence, highest to lowest):
+#   1. `--config <path>` CLI global flag
+#   2. `PQP_CONFIG` environment variable pointing to a file path
+#   3. Default path: `~/.config/pqp/pqp.toml` (XDG), or `~/.pqp/pqp.toml`
+#      (legacy fallback), or `$PQP_HOME/.pqp/pqp.toml` when PQP_HOME is set
+#
+# The `[config]` section is NOT a valid configuration section. If present
+# in this file, a warning is printed and it is silently ignored. Use the
+# `--config` flag or `PQP_CONFIG` env var instead.
 
 # ── gen-key ────────────────────────────────────────────────────────────
 # Default algorithm variants and encoding for key generation.

@@ -31,10 +31,24 @@ resolution. All keyring operations (listing, generating, importing,
 exporting, removing keys, etc.) read from and write to this directory.
 The \fBKEYRING_PATH\fR environment variable and \fI[keyring]\fR config
 section \fIpath\fR key serve the same purpose; this flag takes precedence.
+.TP
+\fB\-\-config\fR \fI\,PATH\/\fR
+Path to an alternative configuration file.  Overrides the default config
+path and the \fBPQP_CONFIG\fR environment variable.
 
 .SH CONFIGURATION FILE
-\fBpqp\fR reads \fI~/.config/pqp/pqp.toml\fR (XDG config directory) if
-present, falling back to \fI~/.pqp/pqp.toml\fR for backward compatibility.
+\fBpqp\fR loads configuration from the first existing path in this order
+(highest precedence last):
+.PP
+.RS
+1.  Code defaults (lowest)
+2.  Default path: \fI~/.config/pqp/pqp.toml\fR (XDG), falling back to
+    \fI~/.pqp/pqp.toml\fR for backward compatibility
+3.  \fBPQP_CONFIG\fR environment variable (overrides default path)
+4.  \fB--config\fR flag (overrides everything) (highest)
+.RE
+.PP
+A \fI[config]\fR section in the configuration file is ignored.
 
 .SH ENVIRONMENT VARIABLES
 .TP

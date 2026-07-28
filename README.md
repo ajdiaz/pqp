@@ -154,6 +154,7 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 | Flag | Description |
 |---|---|---|
 | `--dry-run`, `-n` | Print dry-run message and exit without action |
+| `--config <path>` | Path to config file (or set `PQP_CONFIG` env var) |
 | `--keyring-path <path>` | Use alternative keyring directory (or set `KEYRING_PATH` env var) |
 
 ### ⚙️ Global configuration file
@@ -168,6 +169,14 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 Set `PQP_HOME` environment variable to override both XDG and legacy paths.
 When set, pqp uses the legacy structure inside that directory
 (`$PQP_HOME/.pqp/pqp.toml` for config, `$PQP_HOME/.pqp/keys/` for keys).
+
+**Config file precedence** (lowest to highest):
+
+1. Default path (XDG > legacy > `PQP_HOME`-based)
+2. `PQP_CONFIG` environment variable (overrides the default path)
+3. `--config <path>` CLI flag (overrides everything)
+
+The `[config]` section in the config file is **ignored** — use `--config` CLI flag or `PQP_CONFIG` env var instead.
 
 Set default options per command with TOML sections in the config file; CLI flags always win over config file values.
 

@@ -7,7 +7,7 @@ _pqp() {
     _init_completion || return
 
     # Global flags available before any subcommand
-    local global_opts='-n --dry-run --keyring-path --help -h'
+    local global_opts='-n --dry-run --keyring-path --config --help -h'
 
     # Subcommands
     local commands='gen-key list-keys encrypt decrypt sign verify export remove-key purge-keys edit-key import'
@@ -23,11 +23,15 @@ _pqp() {
                 COMPREPLY=($(compgen -f -- "$cur"))
                 return
                 ;;
+            --config)
+                COMPREPLY=($(compgen -f -- "$cur"))
+                return
+                ;;
         esac
     fi
 
-    # --keyring-path takes a directory argument at any position
-    if [[ "$prev" == "--keyring-path" ]]; then
+    # --keyring-path and --config take file/dir arguments at any position
+    if [[ "$prev" == "--keyring-path" ]] || [[ "$prev" == "--config" ]]; then
         COMPREPLY=($(compgen -f -- "$cur"))
         return
     fi
