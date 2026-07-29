@@ -242,6 +242,41 @@
 //! | HTTP timeout | `import --url` enforces a 30-second timeout to prevent slow-loris DoS. |
 //! | Path traversal defense | Key ID resolution validates all directory names against `^[0-9a-f]{16}$` before use in filesystem operations. |
 //!
+//! # Cryptography
+//!
+//! `pqp` relies on the following pure-Rust crates for all cryptographic
+//! operations. Security guarantees depend on the correctness of these
+//! implementations and their underlying algorithms.
+//!
+//! | Algorithm | Crate | Standard | Post-Quantum |
+//! |---|---|---|---|
+//! | ML-KEM (Kyber) | [`ml-kem`](https://crates.io/crates/ml-kem) v0.3 (RustCrypto) | NIST FIPS 203 | **Yes** — Module Lattice KEM, security based on Module Learning With Errors (MLWE). Believed resistant to Shor's and Grover's quantum algorithms. See [CRYSTALS-Kyber paper](https://eprint.iacr.org/2017/634), [NIST FIPS 203](https://doi.org/10.6028/NIST.FIPS.203), [pq-crystals.org](https://pq-crystals.org/kyber/). |
+//! | ML-DSA (Dilithium) | [`ml-dsa`](https://crates.io/crates/ml-dsa) v0.1 (RustCrypto) | NIST FIPS 204 | **Yes** — Module Lattice Digital Signature, security based on MLWE and MSIS problems. See [CRYSTALS-Dilithium paper](https://eprint.iacr.org/2017/633), [NIST FIPS 204](https://doi.org/10.6028/NIST.FIPS.204), [pq-crystals.org](https://pq-crystals.org/dilithium/). |
+//! | XChaCha20-Poly1305 | [`chacha20poly1305`](https://crates.io/crates/chacha20poly1305) v0.11 (RustCrypto) | IETF RFC 8439 (XChaCha20 extension) | **Indirectly** — symmetric cipher with 256-bit key provides 128-bit post-quantum security against Grover's search. Binds authentication tag to associated data. |
+//! | Argon2id | [`argon2`](https://crates.io/crates/argon2) v0.5 (RustCrypto) | PHC winner (2015), RFC 9106 | **Yes** — memory-hard KDF resistant to GPU/ASIC brute-force acceleration. See [Argon2 specification](https://github.com/P-H-C/phc-winner-argon2), [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106). |
+//! | SHA3-256 | [`sha3`](https://crates.io/crates/sha3) v0.10 (RustCrypto) | NIST FIPS 202 | **Indirectly** — 256-bit output provides 128-bit post-quantum collision resistance against Grover's algorithm. Used for key fingerprinting and KDF. See [NIST FIPS 202](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf). |
+//!
+//! All crates are pure-Rust, audited, and maintained by the RustCrypto
+//! project. The [`pqcrypto` umbrella crate](https://crates.io/crates/pqcrypto)
+//! was explicitly avoided due to RUSTSEC-2026-0164 (unmaintained).
+//!
+//! **Key derivation chain:**
+//! 1. Passphrase → Argon2id → symmetric key (stored parameters per key)
+//! 2. KEM shared secret → SHA3-256 KDF with domain separation
+//!    (`pqp-kem-encrypt-v1`) → XChaCha20 key per NIST SP 800-56C
+//! 3. Passphrase-encrypted secret keys on disk: Argon2id-derived key wraps
+//!    the Kyber + Dilithium private key material using XChaCha20-Poly1305
+//!
+//! **NIST security levels:**
+//! - ML-KEM-512 / ML-DSA-44: NIST Level 1/2 (≈ AES-128 equivalent)
+//! - ML-KEM-768 / ML-DSA-65: NIST Level 3 (≈ AES-192 equivalent) — **default, recommended**
+//! - ML-KEM-1024 / ML-DSA-87: NIST Level 5 (≈ AES-256 equivalent)
+//!
+//! NIST levels are defined by the computational cost of breaking the
+//! algorithm relative to the cost of breaking AES at the corresponding
+//! key size. Level 3 provides a comfortable margin against known quantum
+//! cryptanalytic advances and is the recommended default for most users.
+//!
 //! # Quick start
 //!
 //! ```bash
