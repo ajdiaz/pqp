@@ -3,6 +3,8 @@ name = "pqp"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/ajdiaz/pqp"
+homepage = "https://github.com/ajdiaz/pqp"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

@@ -353,6 +353,12 @@ cargo fmt --check
 
 ---
 
+## 🔗 Links
+
+- 🏠 Project: <https://github.com/ajdiaz/pqp>
+
+---
+
 ## 📜 License
 
 MIT — see [COPYING](COPYING) for details.
