@@ -515,9 +515,6 @@ fn main() -> Result<()> {
             if let Some(ref alg) = compress_alg {
                 alg_vec.push(alg.clone());
             }
-            alg_vec.push(format::Algorithm::Base64);
-            let algorithms = format::AlgorithmList::new(alg_vec);
-
             if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
                 let mut passphrase = passphrase.unwrap();
@@ -534,7 +531,10 @@ fn main() -> Result<()> {
                 sign_sk_bytes.zeroize();
                 kem_sk_bytes.zeroize();
                 payload.extend_from_slice(&signature);
+                alg_vec.push(format::Algorithm::from_dsa_variant(dsa_variant));
             }
+            alg_vec.push(format::Algorithm::Base64);
+            let algorithms = format::AlgorithmList::new(alg_vec);
 
             let encoded =
                 format::encode_payload(&algorithms, &payload).context("encoding payload")?;
@@ -569,12 +569,26 @@ fn main() -> Result<()> {
                 format::deserialize(&data).context("parsing encrypted file")?;
 
             let compress_alg = algorithms.compression();
+            let dsa_variant = algorithms.signature();
 
             let nonce_len = 24;
 
             if payload.len() < nonce_len {
                 return Err(anyhow::anyhow!("payload too short"));
             }
+
+            let sig_len = dsa_variant.map(|v| v.signature_len()).unwrap_or(0);
+            if payload.len() < sig_len {
+                return Err(anyhow::anyhow!("signed payload too short"));
+            }
+            let (enc_data, signature) = if sig_len > 0 {
+                (
+                    &payload[..payload.len() - sig_len],
+                    Some(&payload[payload.len() - sig_len..]),
+                )
+            } else {
+                (payload.as_slice(), None)
+            };
 
             let mut passphrase_vec = passphrase.into_bytes();
             let keys = keyring::list_keys()?;
@@ -586,20 +600,20 @@ fn main() -> Result<()> {
                 {
                     if let Some(kem_variant) = KemVariant::parse(&kem_alg) {
                         let ct_len = kem_variant.ciphertext_len();
-                        if payload.len() < ct_len + nonce_len {
+                        if enc_data.len() < ct_len + nonce_len {
                             kem_sk_bytes.zeroize();
                             continue;
                         }
-                        let ct = &payload[..ct_len];
+                        let ct = &enc_data[..ct_len];
                         let nonce_arr: [u8; 24] =
-                            match payload[ct_len..ct_len + nonce_len].try_into() {
+                            match enc_data[ct_len..ct_len + nonce_len].try_into() {
                                 Ok(n) => n,
                                 Err(_) => {
                                     kem_sk_bytes.zeroize();
                                     continue;
                                 }
                             };
-                        let sym_ciphertext = &payload[ct_len + nonce_len..];
+                        let sym_ciphertext = &enc_data[ct_len + nonce_len..];
                         let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk_bytes) {
                             Ok(sk) => sk,
                             Err(_) => {
@@ -638,6 +652,37 @@ fn main() -> Result<()> {
 
             if let Some(alg) = compress_alg {
                 plaintext = format::decompress(&plaintext, alg)?;
+            }
+
+            if let Some(variant) = dsa_variant {
+                if let Some(sig) = signature {
+                    let mut verified = false;
+                    for key in &keys {
+                        let (_, sign_pk_bytes, _, sign_alg) =
+                            keyring::load_public_key(&key.key_id)?;
+                        if let Some(key_variant) = DsaVariant::parse(&sign_alg) {
+                            if key_variant == variant {
+                                if let Ok(sign_pk) =
+                                    crypto::sign::PublicKey::from_bytes(&sign_pk_bytes, variant)
+                                {
+                                    if sign::verify(&sign_pk, enc_data, sig)? {
+                                        verified = true;
+                                        println!(
+                                            "Signature verified: signed by key-id={}",
+                                            key.key_id
+                                        );
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !verified {
+                        eprintln!(
+                            "Warning: signature could not be verified against any key in the keyring"
+                        );
+                    }
+                }
             }
 
             let out_path = output.unwrap_or_else(|| {

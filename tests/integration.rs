@@ -1141,6 +1141,99 @@ fn test_cli_password_tool_askpass_roundtrip() {
 }
 
 #[test]
+fn test_cli_encrypt_decrypt_with_signature() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let tool = write_askpass_script("signed-passphrase");
+
+    // gen-key: passphrase-protected key (two prompts via the tool)
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "signed@example.com",
+            "--password-tool",
+            &tool,
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let key_id = get_key_id(&home_path);
+
+    // encrypt with --sign: recipient == signer
+    let plain = home.path().join("signed.txt");
+    std::fs::write(&plain, b"data signed and encrypted").unwrap();
+    let enc = home.path().join("signed.txt.pqp.enc");
+    let output = Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "--sign",
+            "--password-tool",
+            &tool,
+            "-o",
+            &enc.to_string_lossy(),
+            &plain.to_string_lossy(),
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "encrypt --sign failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // verify the signature algorithm is recorded in the file header
+    let enc_bytes = std::fs::read(&enc).unwrap();
+    let header = String::from_utf8_lossy(&enc_bytes)
+        .split("::")
+        .next()
+        .unwrap()
+        .to_string();
+    assert!(
+        header.contains("ML-DSA-65"),
+        "encrypted file header should record the DSA variant, got: {}",
+        header
+    );
+
+    // decrypt: should succeed and verify the signature
+    let dec = home.path().join("signed.dec");
+    let output = Command::new(pqp_binary())
+        .args([
+            "decrypt",
+            "--password-tool",
+            &tool,
+            "-o",
+            &dec.to_string_lossy(),
+            &enc.to_string_lossy(),
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "decrypt of signed file failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Signature verified"),
+        "decrypt should verify the signature, got: {}",
+        stdout
+    );
+
+    let decrypted = std::fs::read(&dec).unwrap();
+    assert_eq!(decrypted, b"data signed and encrypted");
+}
+
+#[test]
 fn test_cli_password_tool_bad_tool_fails() {
     let home = TempDir::new().unwrap();
     let home_path = home.path().to_string_lossy().to_string();

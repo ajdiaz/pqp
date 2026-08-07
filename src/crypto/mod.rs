@@ -134,6 +134,16 @@ impl DsaVariant {
         }
     }
 
+    /// Returns the encoded signature byte length for this variant
+    /// (FIPS 204 signature sizes: 2420/3309/4627 bytes).
+    pub fn signature_len(self) -> usize {
+        match self {
+            DsaVariant::MlDsa44 => 2420,
+            DsaVariant::MlDsa65 => 3309,
+            DsaVariant::MlDsa87 => 4627,
+        }
+    }
+
     /// Parse a canonical name into a variant.
     pub fn parse(s: &str) -> Option<Self> {
         use std::str::FromStr;

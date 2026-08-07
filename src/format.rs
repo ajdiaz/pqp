@@ -188,6 +188,12 @@ impl AlgorithmList {
         self.algorithms.iter().find(|alg| alg.is_compression())
     }
 
+    /// Return the DSA variant used to sign the payload, if the list
+    /// contains a signature algorithm.
+    pub fn signature(&self) -> Option<crate::crypto::DsaVariant> {
+        self.algorithms.iter().find_map(|alg| alg.to_dsa_variant())
+    }
+
     /// Parse a `+`-separated algorithm string into an [`AlgorithmList`].
     pub fn parse(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split('+').collect();

@@ -329,15 +329,15 @@ AlgorithmList::EncodedPayload
 
 ```
 ┌──────────────────────────────┐
-│  AlgorithmList (canonical)  │
+│  AlgorithmList (canonical)   │  e.g. ML-KEM-768+XChaCha20-Poly1305+ML-DSA-65+BASE64
 ├──────────────────────────────┤
 │  :: separator                │
 ├──────────────────────────────┤
 │  KEM ciphertext              │
 │  Symmetric nonce (24 bytes)  │
 │  Symmetric ciphertext + tag  │
-│  Optional Dilithium signature│
-└──────────────────────────────┘
+│  Optional Dilithium signature│  (recorded in AlgorithmList; stripped before
+└──────────────────────────────┘   symmetric decryption, then verified by decrypt)
 ```
 
 ---

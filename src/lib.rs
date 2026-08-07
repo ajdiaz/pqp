@@ -128,7 +128,7 @@
 //! | `-r`, `--recipient` | Recipient key ID or user ID |
 //! | `-o`, `--output` | Output file path |
 //! | `--compress` | Compression: `none`, `zstd` (default), `gzip`, `bzip2`, `lzma` |
-//! | `-s`, `--sign` | Sign the ciphertext with sender key |
+//! | `-s`, `--sign` | Sign the ciphertext with sender key (DSA variant recorded in the AlgorithmList; decrypt strips and verifies it) |
 //! | `-u`, `--signer` | Signer key ID or user ID (requires `--sign`) |
 //! | `--allow-expired` | Allow using an expired recipient or signer key |
 //! | `infile` | Input file path (omit or `-` for stdin) |

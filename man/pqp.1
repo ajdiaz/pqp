@@ -554,8 +554,14 @@ The decoded payload contains, in order:
 1.  KEM ciphertext (Kyber encapsulated key)
 2.  Symmetric nonce (24 bytes for XChaCha20-Poly1305)
 3.  Symmetric ciphertext + authentication tag
-4.  Optional Dilithium signature (if \fB\-s\fR was used)
+4.  Optional Dilithium signature (if \fB\-\-sign\fR was used)
 .RE
+When a signature is present, the AlgorithmList records the exact DSA variant
+(e.g. ML\-KEM\-768+XChaCha20\-Poly1305+ML\-DSA\-65+BASE64) so decrypt can strip the
+fixed-size signature from the end of the payload before symmetric decryption.
+Decrypt verifies the signature over the KEM ciphertext + nonce + symmetric
+ciphertext portion against every key in the keyring; if no key matches, a
+warning is printed to stderr but the file is still decrypted.
 .SS Signature files (.pqp.sig)
 .RS
 1.  SHA3-256 hash of the original file
