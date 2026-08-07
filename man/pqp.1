@@ -103,6 +103,14 @@ section \fIpath\fR key serve the same purpose; this flag takes precedence.
 \fB\-\-config\fR \fI\,PATH\/\fR
 Path to an alternative configuration file.  Overrides the default config
 path and the \fBPQP_CONFIG\fR environment variable.
+.TP
+\fB\-\-password\-tool\fR \fI\,TOOL\/\fR
+Use an external tool to obtain passphrases instead of the interactive
+prompt.  Tools whose name contains \fBpinentry\fR are driven through the
+Assuan \fBGETPIN\fR protocol; any other tool is treated as an askpass-style
+helper, invoked with the prompt text as its final argument, reading the
+passphrase from stdout.  If not configured, the interactive prompt is used
+(requires a TTY).
 
 .SH CONFIGURATION FILE
 \fBpqp\fR loads configuration from the first existing path in this order

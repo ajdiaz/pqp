@@ -20,15 +20,6 @@ use zeroize::Zeroize;
 
 const MAX_INPUT_SIZE: u64 = 100 * 1024 * 1024; // 100 MiB
 
-fn read_passphrase(prompt: &str) -> Result<String> {
-    match rpassword::prompt_password(prompt) {
-        Ok(p) => Ok(p),
-        Err(_e) => Err(anyhow::anyhow!(
-            "cannot read passphrase without a TTY (try --no-passphrase)"
-        )),
-    }
-}
-
 fn confirm_import(key_id: &str) -> Result<bool> {
     let prompt = format!("Import key {}? [y/N] ", key_id);
     eprint!("{}", prompt);
@@ -115,6 +106,14 @@ fn main() -> Result<()> {
         keyring::set_keyring_override(Some(PathBuf::from(path)));
     }
 
+    // Resolve password tool: CLI --password-tool > config [password-tool].command > none
+    let password_tool = cli.password_tool.clone().or_else(|| {
+        config::section(&cfg, "password-tool")
+            .and_then(|s| s.get("command"))
+            .and_then(|v| v.as_str().map(String::from))
+    });
+    pqp::password::set_password_tool(password_tool);
+
     match cli.command {
         Commands::GenKey {
             user,
@@ -149,8 +148,8 @@ fn main() -> Result<()> {
             let passphrase = if no_passphrase {
                 String::new()
             } else {
-                let passphrase = read_passphrase("Enter passphrase for new key: ")?;
-                let passphrase2 = read_passphrase("Confirm passphrase: ")?;
+                let passphrase = pqp::password::read_passphrase("Enter passphrase for new key: ")?;
+                let passphrase2 = pqp::password::read_passphrase("Confirm passphrase: ")?;
                 if passphrase != passphrase2 {
                     return Err(anyhow::anyhow!("passphrases do not match"));
                 }
@@ -450,7 +449,7 @@ fn main() -> Result<()> {
 
             let passphrase = if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
-                Some(read_passphrase(&format!(
+                Some(pqp::password::read_passphrase(&format!(
                     "Enter passphrase for key {}: ",
                     sid
                 ))?)
@@ -560,7 +559,7 @@ fn main() -> Result<()> {
             let passphrase = if no_passphrase {
                 String::new()
             } else {
-                read_passphrase("Enter passphrase for secret key: ")?
+                pqp::password::read_passphrase("Enter passphrase for secret key: ")?
             };
 
             let data = read_input(&input)?;
@@ -671,7 +670,7 @@ fn main() -> Result<()> {
             let passphrase = if no_passphrase {
                 String::new()
             } else {
-                read_passphrase("Enter passphrase for signing key: ")?
+                pqp::password::read_passphrase("Enter passphrase for signing key: ")?
             };
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
@@ -927,12 +926,12 @@ fn main() -> Result<()> {
             }
 
             let new_passphrase: Option<(String, String)> = if no_passphrase {
-                let old = read_passphrase("Enter current passphrase for key: ")?;
+                let old = pqp::password::read_passphrase("Enter current passphrase for key: ")?;
                 Some((old, String::new()))
             } else if passphrase {
-                let old = read_passphrase("Enter current passphrase for key: ")?;
-                let new_p = read_passphrase("Enter new passphrase for key: ")?;
-                let new_p2 = read_passphrase("Confirm new passphrase: ")?;
+                let old = pqp::password::read_passphrase("Enter current passphrase for key: ")?;
+                let new_p = pqp::password::read_passphrase("Enter new passphrase for key: ")?;
+                let new_p2 = pqp::password::read_passphrase("Confirm new passphrase: ")?;
                 if new_p != new_p2 {
                     return Err(anyhow::anyhow!("passphrases do not match"));
                 }

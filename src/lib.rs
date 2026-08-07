@@ -65,6 +65,7 @@
 //! | `[edit-key]` | `encoding` | `BASE64`, `ASCII85` | (none) | new encoding for armored output |
 //! | `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 //! | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location |
+//! | `[password-tool]` | `command` | any program path (e.g. `pinentry`) | (none) | external tool for passphrase prompts; overridden by `--password-tool` flag |
 //!
 //! Example `~/.config/pqp/pqp.toml`:
 //! ```toml
@@ -83,6 +84,7 @@
 //! | `--dry-run` / `-n` | Print a dry-run message to stderr and exit without action |
 //! | `--keyring-path <path>` | Use an alternative keyring directory (also via `KEYRING_PATH` env or `[keyring].path` config) |
 //! | `--config <path>` | Path to an alternative configuration file (also via `PQP_CONFIG` env var) |
+//! | `--password-tool <tool>` | External tool for passphrase prompts (e.g. pinentry); askpass-style tools receive the prompt as their final argument and print the passphrase on stdout |
 //!
 //! # Environment variables
 //!
@@ -301,4 +303,5 @@ pub mod crypto;
 pub mod expiry;
 pub mod format;
 pub mod keyring;
+pub mod password;
 pub mod util;

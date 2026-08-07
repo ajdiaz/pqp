@@ -1312,9 +1312,14 @@ fn test_edit_key_expiration() {
         Vec::new(),
     )
     .unwrap();
+    // The stored expiration is 30 days from now; compare the date prefix to
+    // avoid a stale hardcoded date.
+    let expected = pqp::expiry::parse_expiration("30d").unwrap();
     assert!(
-        updated.expiration_date.contains("2026-08-28")
-            || updated.expiration_date.contains("2026-08-29")
+        updated.expiration_date.starts_with(&expected[..10]),
+        "expected expiration starting with {:?}, got {:?}",
+        &expected[..10],
+        updated.expiration_date
     );
 }
 

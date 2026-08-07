@@ -121,6 +121,8 @@ pqp decrypt -o report.pdf report.pdf.pqp.enc
 # Decrypted: report.pdf
 ```
 
+By default, passphrase prompts (gen-key, decrypt, sign, edit-key) are interactive and require a TTY. To use an external agent instead, pass `--password-tool <tool>` (e.g. `pinentry`, `/usr/bin/ssh-askpass`) or set `command` under the `[password-tool]` config section; the tool is invoked once per prompt and its output is used as the passphrase.
+
 ### Sign and verify
 
 ```bash
@@ -185,6 +187,7 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 | `--dry-run`, `-n` | Print dry-run message and exit without action |
 | `--config <path>` | Path to config file (or set `PQP_CONFIG` env var) |
 | `--keyring-path <path>` | Use alternative keyring directory (or set `KEYRING_PATH` env var) |
+| `--password-tool <tool>` | Use an external tool for passphrase prompts (e.g. `pinentry`). Without it, prompts are interactive (TTY required). |
 
 ### ⚙️ Global configuration file
 
@@ -233,6 +236,7 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[edit-key]` | `encoding` | `BASE64`, `ASCII85` | (none) | new encoding for armored output |
 | `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location (XDG / PQP_HOME) |
+| `[password-tool]` | `command` | e.g. `pinentry`, `/usr/bin/ssh-askpass` | (none) | external tool for passphrase prompts; `--password-tool` flag overrides |
 
 Example with non-default choices:
 

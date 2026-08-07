@@ -35,6 +35,14 @@ pub struct Cli {
     )]
     pub config: Option<String>,
 
+    /// External tool for obtaining passphrases.
+    #[arg(
+        long = "password-tool",
+        global = true,
+        help = "External tool for passphrase prompts (e.g. pinentry)"
+    )]
+    pub password_tool: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

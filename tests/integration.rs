@@ -685,6 +685,27 @@ fn get_key_id(pqp_home_val: &str) -> String {
         .to_string()
 }
 
+/// Write an executable askpass-style mock script that prints a fixed
+/// passphrase to stdout, ignoring the prompt argument. Returns its path.
+fn write_askpass_script(passphrase: &str) -> String {
+    let dir = std::env::temp_dir().join(format!(
+        "pqp_askpass_mock_{}_{}",
+        std::process::id(),
+        passphrase.len()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("mock-askpass.sh");
+    let script = format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", passphrase);
+    std::fs::write(&path, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    path.to_string_lossy().to_string()
+}
+
 fn gen_expired_key(pqp_home_val: &str, user: &str) -> String {
     let output = Command::new(pqp_binary())
         .args([
@@ -1046,6 +1067,129 @@ fn test_cli_purge_keys_remove_private() {
         String::from_utf8_lossy(&output.stdout).contains("No keys in keyring"),
         "list-keys after purge: {}",
         String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn test_cli_password_tool_askpass_roundtrip() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let tool = write_askpass_script("mock-passphrase-42");
+
+    // gen-key: two prompts (passphrase + confirm), both answered by the tool
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "tool@example.com",
+            "--password-tool",
+            &tool,
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key with password tool failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let key_id = get_key_id(&home_path);
+
+    // encrypt (no signing passphrase needed)
+    let plain = home.path().join("secret.txt");
+    std::fs::write(&plain, b"password-tool roundtrip data").unwrap();
+    let enc = home.path().join("secret.txt.pqp.enc");
+    let output = Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "-o",
+            &enc.to_string_lossy(),
+            &plain.to_string_lossy(),
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "encrypt failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // decrypt: uses the tool for the passphrase
+    let dec = home.path().join("secret.dec");
+    let output = Command::new(pqp_binary())
+        .args([
+            "decrypt",
+            "--password-tool",
+            &tool,
+            "-o",
+            &dec.to_string_lossy(),
+            &enc.to_string_lossy(),
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "decrypt with password tool failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let decrypted = std::fs::read(&dec).unwrap();
+    assert_eq!(decrypted, b"password-tool roundtrip data");
+}
+
+#[test]
+fn test_cli_password_tool_bad_tool_fails() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "badtool@example.com",
+            "--password-tool",
+            "definitely-not-a-real-tool-xyz",
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "gen-key should fail with an unusable password tool"
+    );
+}
+
+#[test]
+fn test_cli_password_tool_pinentry_protocol() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let dir = std::env::temp_dir().join(format!("pqp_pinentry_mock_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("mock-pinentry.sh");
+    std::fs::write(
+        &path,
+        "#!/bin/sh\nwhile IFS= read -r line; do\n  case \"$line\" in\n    SETDESC*) echo OK ;;\n    SETPROMPT*) echo OK ;;\n    GETPIN) echo \"D pinentry-pass\"; echo OK; exit 0 ;;\n    *) echo \"ERR unknown\"; exit 1 ;;\n  esac\ndone\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let tool = path.to_string_lossy().to_string();
+
+    let output = Command::new(pqp_binary())
+        .args(["gen-key", "-u", "pin@example.com", "--password-tool", &tool])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key with pinentry mock failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 

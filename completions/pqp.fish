@@ -11,6 +11,7 @@ end
 complete -c pqp -s n -l dry-run -d "Do nothing, print dry-run message"
 complete -c pqp -f -l keyring-path -d "Use an alternative keyring directory" -r
 complete -c pqp -f -l config -d "Path to an alternative configuration file" -r
+complete -c pqp -f -l password-tool -d "External tool for passphrase prompts" -r
 
 # --- gen-key ---
 complete -c pqp -f -n "__fish_use_subcommand" -a gen-key -d "Generate a PQ key pair (Kyber + Dilithium)"

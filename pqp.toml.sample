@@ -331,3 +331,23 @@ compress = "zstd"
 # Example:
 #   path = "/mnt/usb/pqp-keys"
 # path = ""
+
+# ── password-tool ──────────────────────────────────────────────────────
+# External program used to ask for passphrases, instead of the default
+# interactive rpassword prompt. The CLI global flag --password-tool
+# overrides this config value.
+#
+# Two kinds of tools are supported:
+#   * pinentry (any binary whose name contains "pinentry") is driven
+#     through the standard Assuan GETPIN protocol.
+#   * any other program is treated as an askpass-style helper: it is
+#     invoked with the prompt text as its final argument and the
+#     passphrase is read from its stdout.
+#
+# If no tool is configured, the interactive prompt is used (requires a TTY).
+#
+# Example:
+#   command = "pinentry"
+#   command = "/usr/bin/pinentry-curses"
+#   command = "/usr/bin/ssh-askpass"
+# command = ""

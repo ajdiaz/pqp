@@ -26,6 +26,7 @@ _pqp() {
         '(-n --dry-run)'{-n,--dry-run}'[Do nothing, print dry-run message]'
         '--keyring-path[Use an alternative keyring directory]:keyring path:_files -/'
         '--config[Path to an alternative configuration file]:config file:_files'
+        '--password-tool[External tool for passphrase prompts]'
         '*: :->subcmd'
     )
 
