@@ -7,10 +7,10 @@ _pqp() {
     _init_completion || return
 
     # Global flags available before any subcommand
-    local global_opts='-n --dry-run --keyring-path --config --password-tool --help -h'
+    local global_opts='-n --dry-run --keyring-path --config --password-tool --unix-socket-path --help -h'
 
     # Subcommands
-    local commands='gen-key list-keys encrypt decrypt sign verify export remove-key purge-keys edit-key import'
+    local commands='gen-key list-keys encrypt decrypt sign verify export remove-key purge-keys edit-key import agent'
 
     # Subcommand dispatch
     if [[ $cword -eq 1 ]]; then
@@ -34,8 +34,9 @@ _pqp() {
         esac
     fi
 
-    # --keyring-path, --config and --password-tool take file/program arguments at any position
-    if [[ "$prev" == "--keyring-path" ]] || [[ "$prev" == "--config" ]] || [[ "$prev" == "--password-tool" ]]; then
+    # --keyring-path, --config, --password-tool and --unix-socket-path take
+    # file/program arguments at any position
+    if [[ "$prev" == "--keyring-path" ]] || [[ "$prev" == "--config" ]] || [[ "$prev" == "--password-tool" ]] || [[ "$prev" == "--unix-socket-path" ]]; then
         COMPREPLY=($(compgen -f -- "$cur"))
         return
     fi
@@ -182,6 +183,21 @@ _pqp() {
             case "$prev" in
                 *)
                     COMPREPLY=($(compgen -W '--no-ask-confirmation --remove-private-keys --help -h' -- "$cur"))
+                    return
+                    ;;
+            esac
+            ;;
+        agent)
+            case "$prev" in
+                --unix-socket-path)
+                    COMPREPLY=($(compgen -f -- "$cur"))
+                    return
+                    ;;
+                --expire-time)
+                    return
+                    ;;
+                *)
+                    COMPREPLY=($(compgen -W '--expire-time --stop --unix-socket-path --help -h' -- "$cur"))
                     return
                     ;;
             esac

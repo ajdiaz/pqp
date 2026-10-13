@@ -123,6 +123,25 @@ pqp decrypt -o report.pdf report.pdf.pqp.enc
 
 By default, passphrase prompts (gen-key, decrypt, sign, edit-key) are interactive and require a TTY. To use an external agent instead, pass `--password-tool <tool>` (e.g. `pinentry`, `/usr/bin/ssh-askpass`) or set `command` under the `[password-tool]` config section; the tool is invoked once per prompt and its output is used as the passphrase.
 
+### 🔑 Passphrase agent (gpg-agent/ssh-agent analogue)
+
+Run the agent once in the background and `pqp` will cache passphrases in
+memory so `decrypt`, `sign`, `encrypt --sign`, and `edit-key` stop
+re-prompting:
+
+```bash
+pqp agent --expire-time 1h &            # Start the passphrase agent (1h TTL)
+pqp encrypt -r alice -o msg.pqp.enc -s msg.txt   # prompts once
+pqp decrypt -o msg.txt msg.pqp.enc               # no prompt — served from cache
+pqp sign -u alice -o doc.pqp.sig doc.txt         # cache-backed too
+pqp agent --stop                                 # stop and wipe the cache
+```
+
+- The socket lives at `$XDG_RUNTIME_DIR/pqp-agent.sock` (or `$PQP_HOME/.pqp/agent.sock` when `PQP_HOME` is set); override with `--unix-socket-path` or `[agent].unix-socket-path`.
+- Entries expire after `--expire-time` (default `10m`; formats like `600`, `10m`, `8h`, `1h30m`). Each use refreshes the TTL, like gpg-agent.
+- Cached passphrases live in process memory only and are zeroized on expiry, eviction, or shutdown — never written to disk.
+- Without a running agent, `pqp` falls back to the normal interactive prompt, so nothing breaks.
+
 ### Sign and verify
 
 ```bash
@@ -152,7 +171,6 @@ pqp import key.pqp.pub                               # PQP format auto-detected
 pqp import --url https://keys.example.com/bob.pqp.asc
 pqp import --force key.pqp.pub                        # Override key with same fingerprint
 pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
-pqp remove-key a1b2c3d4e5f6a7b8 --remove-private-key
 pqp edit-key a1b2c3d4e5f6a7b8 --user "alice@newdomain.com" --encoding ASCII85 --metadata department=engineering
 pqp edit-key alice@example.com --expiration-date 2y           # Extend key by 2 years
 pqp edit-key a1b2c3d4e5f6a7b8 --passphrase                   # Prompts for old + new passphrase
@@ -179,6 +197,7 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 | `remove-key` | Remove a public (and optionally private) key |
 | `purge-keys` | Remove all keys from the keyring |
 | `edit-key` | Edit an existing key's metadata and/or passphrase |
+| `agent` | Run a passphrase-caching agent (gpg-agent/ssh-agent analogue) |
 
 ### 🌐 Global flags
 
@@ -188,6 +207,7 @@ pqp purge-keys --remove-private-keys --no-ask-confirmation     # Remove all keys
 | `--config <path>` | Path to config file (or set `PQP_CONFIG` env var) |
 | `--keyring-path <path>` | Use alternative keyring directory (or set `KEYRING_PATH` env var) |
 | `--password-tool <tool>` | Use an external tool for passphrase prompts (e.g. `pinentry`). Without it, prompts are interactive (TTY required). |
+| `--unix-socket-path <path>` | Path to the pqp agent Unix socket (also `[agent].unix-socket-path` config key). |
 
 ### ⚙️ Global configuration file
 
@@ -237,6 +257,8 @@ Set default options per command with TOML sections in the config file; CLI flags
 | `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location (XDG / PQP_HOME) |
 | `[password-tool]` | `command` | e.g. `pinentry`, `/usr/bin/ssh-askpass` | (none) | external tool for passphrase prompts; `--password-tool` flag overrides |
+| `[agent]` | `expire-time` | `600`, `10m`, `8h`, `1d`, compound like `1h30m` | `10m` | cache TTL; refreshed on every use (gpg-agent behaviour) |
+| `[agent]` | `unix-socket-path` | any file path | (auto) | agent socket location; `--unix-socket-path` flag overrides |
 
 Example with non-default choices:
 
@@ -259,6 +281,10 @@ compress = "none"      # No compression on export
 [edit-key]
 encoding = "ASCII85"   # Default encoding when editing
 compress = "zstd"      # Default compression when editing
+
+[agent]
+expire-time = "30m"       # Forget passphrases after 30 minutes idle
+unix-socket-path = "/run/user/1000/pqp-agent.sock"
 ```
 
 A fully commented sample with detailed pros/cons for every value is at [`pqp.toml.sample`](pqp.toml.sample).
@@ -275,6 +301,7 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 | Secrets zeroization | All passphrases and secret key material are zeroized in memory after use. |
 | Constant-time compare | Signature hash comparison uses `subtle::ConstantTimeEq`. |
 | Argon2id configurable | KDF parameters (memory, time, parallelism) are stored per-key and configurable via CLI or config file. |
+| Agent passphrase vault | `pqp agent` keeps cached passphrases only in memory (`Zeroizing` buffers, wiped on expiry/eviction/shutdown) behind a `0o600` Unix socket in a `0o700` directory. |
 
 ---
 
@@ -301,6 +328,8 @@ A fully commented sample with detailed pros/cons for every value is at [`pqp.tom
 **purge-keys:** `--no-ask-confirmation` · `--remove-private-keys`
 
 **edit-key:** `<key-id>` · `--user` · `--expiration-date` · `--encoding` · `--compress` · `--passphrase` · `--no-passphrase` · `--metadata`
+
+**agent:** `--expire-time <ttl>` · `--stop`
 
 > ⚠️ **Warning:** `edit-key` only modifies the key stored in the **local keyring**. If the same key was exported, uploaded to a key server, or exists in another keyring, those copies are **not** modified. Re-export and redistribute the key after editing. 
 

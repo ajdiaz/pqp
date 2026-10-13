@@ -111,6 +111,12 @@ Assuan \fBGETPIN\fR protocol; any other tool is treated as an askpass-style
 helper, invoked with the prompt text as its final argument, reading the
 passphrase from stdout.  If not configured, the interactive prompt is used
 (requires a TTY).
+.TP
+\fB\-\-unix\-socket\-path\fR \fI\,PATH\/\fR
+Path to the pqp agent Unix socket.  Overrides the \fI[agent]\fR config
+section \fIunix-socket-path\fR key.  When neither is set, the default is
+\fI$PQP_HOME/.pqp/agent.sock\fR (when \fBPQP_HOME\fR is set),
+\fI$XDG_RUNTIME_DIR/pqp-agent.sock\fR, or the pqp data directory.
 
 .SH CONFIGURATION FILE
 \fBpqp\fR loads configuration from the first existing path in this order
@@ -162,6 +168,15 @@ A fully commented sample with pros/cons for every value is installed at
 \fIshare/doc/pqp/pqp.toml.sample\fR or available in the source tree.
 Config file support mirrors CLI commands.  New options added to the CLI
 must also be added to the config file system.
+
+The \fI[agent]\fR section configures the passphrase-caching agent:
+.IP \(bu 3
+\fBexpire-time\fR \(em cache TTL (default \fB10m\fR); formats: bare
+seconds (\fB600\fR) or suffixed (\fB10m\fR, \fB8h\fR, \fB1d\fR,
+compound \fB1h30m\fR).  Refreshed on every use.
+.IP \(bu 3
+\fBunix-socket-path\fR \(em agent socket location; overridden by the
+\fB--unix-socket-path\fR global flag.
 
 .SH COMMANDS
 .SS gen\-key
@@ -523,6 +538,50 @@ Skip the confirmation prompt before removing.
 Also delete the encrypted secret key on disk.  Without this flag, only
 the public key and metadata are removed.
 
+.SS agent
+Run a background passphrase-caching daemon (a gpg-agent / ssh-agent
+analogue) over a Unix domain socket.  Once a passphrase has been entered
+by a pqp client while the agent is running, subsequent private-key
+operations (\fBdecrypt\fR, \fBsign\fR, \fBencrypt \-\-sign\fR, \fBedit\-key\fR)
+fetch it from the agent instead of prompting again.
+.PP
+.B pqp agent [\fI\,OPTIONS\/\fR]
+.TP
+\fB\-\-expire\-time\fR \fI\,TTL\/\fR
+Cache time-to-live.  Default: \fB10m\fR.
+.RS
+.TP
+\fBBARE SECONDS\fR
+e.g. \fB600\fR.
+.TP
+\fB<m>m\fR
+Minutes, e.g. \fB10m\fR.
+.TP
+\fB<h>h\fR
+Hours, e.g. \fB8h\fR.
+.TP
+\fB<d>d\fR
+Days, e.g. \fB1d\fR.
+.TP
+\fBCOMPOUND\fR
+Multiple components allowed, e.g. \fB1h30m\fR.
+.RE
+Every successful use of a cached entry refreshes its TTL (gpg-agent
+behaviour); zero, empty, or unknown-unit values are rejected.
+.TP
+\fB\-\-stop\fR
+Stop a running agent (identified by the resolved socket path) and exit.
+The agent wipes all cached passphrases and removes its socket before
+exiting.
+.PP
+The socket path is resolved in this order: \fB--unix-socket-path\fR flag,
+\fI[agent].unix-socket-path\fR config key, then the default
+(\fI$PQP_HOME/.pqp/agent.sock\fR when \fBPQP_HOME\fR is set,
+\fI$XDG_RUNTIME_DIR/pqp-agent.sock\fR, or the pqp data directory).
+The socket is created with \fB0o600\fR permissions inside a \fB0o700\fR
+directory.  Cached passphrases live only in process memory and are zeroized
+on expiry, eviction, or shutdown; they are never written to disk.
+
 .SH KEY IDENTIFIER RESOLUTION
 All commands that take a key reference (\fBencrypt \-r\fR, \fBencrypt \-u\fR,
 \fBsign \-u\fR, \fBexport\fR, \fBimport\fR) accept either a key ID
@@ -603,6 +662,14 @@ ASCII-armored public key (export format).
 .TP
 \fI.pqp.pub\fR
 PQP self-describing public key (export format).
+.TP
+\fI$XDG_RUNTIME_DIR/pqp-agent.sock\fR
+Default Unix socket of the passphrase agent (when \fBXDG_RUNTIME_DIR\fR
+is set and \fBPQP_HOME\fR is not).  Created with \fB0o600\fR permissions.
+A stale socket from a crashed agent is removed on startup.
+.TP
+\fI$PQP_HOME/.pqp/agent.sock\fR
+Agent socket when \fBPQP_HOME\fR is set.
 
 .SH EXIT STATUS
 .TP
@@ -632,6 +699,13 @@ Export and import keys
 .B pqp export alice \-o alice.pqp.asc
 .br
 .B pqp import alice.pqp.asc
+.TP
+Cache passphrases with the agent
+.B pqp agent \-\-expire\-time 1h &
+.br
+.B pqp decrypt \-o doc.pdf secret.pqp.enc
+.br
+.B pqp agent \-\-stop
 
 .SH SEE ALSO
 .BR gpg (1)

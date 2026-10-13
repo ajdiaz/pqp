@@ -20,6 +20,7 @@ _pqp() {
 'purge-keys:Remove all keys from the keyring'
         'edit-key:Edit an existing key'\''s metadata and/or passphrase'
         'import:Import a public key'
+        'agent:Run a passphrase-caching agent (gpg-agent/ssh-agent analogue)'
     )
 
     args=(
@@ -27,6 +28,7 @@ _pqp() {
         '--keyring-path[Use an alternative keyring directory]:keyring path:_files -/'
         '--config[Path to an alternative configuration file]:config file:_files'
         '--password-tool[External tool for passphrase prompts]'
+        '--unix-socket-path[Path to the pqp agent Unix socket]:socket path:_files'
         '*: :->subcmd'
     )
 
@@ -71,6 +73,9 @@ _pqp() {
             ;;
         import)
             _pqp_import
+            ;;
+        agent)
+            _pqp_agent
             ;;
     esac
 }
@@ -167,6 +172,13 @@ _pqp_import() {
         '--dont-ask-confirmation[Skip confirmation prompt before importing]' \
         '--force[Force override of an existing key with the same fingerprint]' \
         '*:input file:_files'
+}
+
+_pqp_agent() {
+    _arguments \
+        '--expire-time[Cache time-to-live (e.g. 600, 10m, 8h, 1h30m)]:ttl:' \
+        '--stop[Stop a running agent and exit]' \
+        '--unix-socket-path[Path to the pqp agent Unix socket]:socket path:_files'
 }
 
 _pqp "$@"

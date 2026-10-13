@@ -351,3 +351,36 @@ compress = "zstd"
 #   command = "/usr/bin/pinentry-curses"
 #   command = "/usr/bin/ssh-askpass"
 # command = ""
+
+# ── agent ───────────────────────────────────────────────────────────────
+# Passphrase-caching agent (gpg-agent/ssh-agent analogue).
+# The `pqp agent` command runs a daemon over a Unix socket that caches
+# private-key passphrases in memory so decrypt/sign/encrypt --sign/edit-key
+# stop re-prompting. The CLI global flag --unix-socket-path overrides the
+# socket location; --expire-time on the agent subcommand overrides the TTL.
+
+[agent]
+
+# Cache time-to-live: how long a cached passphrase remains valid without
+# being used. Every successful use of an entry refreshes the TTL (same
+# behaviour as gpg-agent), so an actively-used passphrase never expires.
+#
+# Possible values:
+#   "600"          — Bare seconds.
+#   "10m"          — Minutes suffix.
+#   "8h"           — Hours suffix.
+#   "1d"           — Days suffix.
+#   "1h30m"        — Compound durations (multiple components allowed).
+#
+# Zero, empty, or unknown-unit values are rejected with an error.
+# Default: "10m" (10 minutes).
+# expire-time = "10m"
+
+# Unix socket path used by the agent. When unset, the default is:
+#   $PQP_HOME/.pqp/agent.sock          (when PQP_HOME is set)
+#   $XDG_RUNTIME_DIR/pqp-agent.sock    (when XDG_RUNTIME_DIR is set)
+#   <XDG data dir>/pqp/agent.sock      (final fallback)
+#
+# The socket is created with 0o600 permissions inside a 0o700 directory.
+# Stale sockets from crashed agents are detected and removed on startup.
+# unix-socket-path = "/run/user/1000/pqp-agent.sock"

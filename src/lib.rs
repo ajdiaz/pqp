@@ -28,6 +28,7 @@
 //! | [`edit-key`](cli::Commands::EditKey) | Edit an existing key's metadata and/or passphrase |
 //! | [`remove-key`](cli::Commands::RemoveKey) | Remove a public (and optionally private) key |
 //! | [`purge-keys`](cli::Commands::PurgeKeys) | Remove all keys from the keyring |
+//! | [`agent`](cli::Commands::Agent) | Run a passphrase-caching agent (gpg-agent/ssh-agent analogue) |
 //!
 //! # Global configuration file
 //!
@@ -66,6 +67,8 @@
 //! | `[edit-key]` | `compress` | `none`, `zstd`, `gzip`, `bzip2`, `lzma` | (none) | new default compression algorithm |
 //! | `[keyring]` | `path` | any directory path | (none) | overrides default keyring location |
 //! | `[password-tool]` | `command` | any program path (e.g. `pinentry`) | (none) | external tool for passphrase prompts; overridden by `--password-tool` flag |
+//! | `[agent]` | `expire-time` | `600`, `10m`, `8h`, `1d`, compound like `1h30m` | `10m` | cache TTL; refreshed on every use, mirroring gpg-agent |
+//! | `[agent]` | `unix-socket-path` | any file path | (auto) | agent socket location; overridden by `--unix-socket-path` flag |
 //!
 //! Example `~/.config/pqp/pqp.toml`:
 //! ```toml
@@ -85,6 +88,7 @@
 //! | `--keyring-path <path>` | Use an alternative keyring directory (also via `KEYRING_PATH` env or `[keyring].path` config) |
 //! | `--config <path>` | Path to an alternative configuration file (also via `PQP_CONFIG` env var) |
 //! | `--password-tool <tool>` | External tool for passphrase prompts (e.g. pinentry); askpass-style tools receive the prompt as their final argument and print the passphrase on stdout |
+//! | `--unix-socket-path <path>` | Path to the pqp agent Unix socket (also via `[agent].unix-socket-path` config) |
 //!
 //! # Environment variables
 //!
@@ -142,6 +146,10 @@
 //! | `--no-passphrase` | Use empty passphrase (no prompt) |
 //! | `infile` | Input file path (omit or `-` for stdin) |
 //!
+//! When a `pqp agent` is running, its cached passphrase (if any) is used
+//! without prompting; otherwise the user is prompted once and the passphrase
+//! is cached in the agent for subsequent runs.
+//!
 //! ### `sign`
 //! `pqp sign -u <user> -o <outfile> [--no-passphrase] [--allow-expired] [infile]`
 //!
@@ -152,6 +160,10 @@
 //! | `--no-passphrase` | Use empty passphrase (no prompt) |
 //! | `--allow-expired` | Allow using an expired signing key |
 //! | `infile` | Input file path (omit or `-` for stdin) |
+//!
+//! The signing passphrase is resolved through a running `pqp agent` first
+//! (cached entries avoid re-prompting) and cached back into it on a
+//! successful interactive prompt.
 //!
 //! ### `verify`
 //! `pqp verify <signature> [infile]`
@@ -221,6 +233,35 @@
 //! | `--no-passphrase` | Set empty passphrase (prompts for old passphrase) |
 //! | `--metadata` | Add metadata as `key=value` pairs (repeatable, appended) |
 //!
+//! ### `agent`
+//! `pqp agent [--expire-time <ttl>] [--stop]`
+//!
+//! Runs a background passphrase-caching daemon (a `gpg-agent` / `ssh-agent`
+//! analogue) over a Unix domain socket. Once a passphrase has been entered by
+//! `pqp` while the agent is running, subsequent private-key operations
+//! (`decrypt`, `sign`, `encrypt --sign`, `edit-key`) fetch it from the agent
+//! instead of prompting again.
+//!
+//! | Flag | Description |
+//! |---|---|
+//! | `--expire-time` | Cache time-to-live: bare seconds (`600`) or compound (`10m`, `8h`, `1d`, `1h30m`). Default `10m`. Refreshed on every use. |
+//! | `--stop` | Stop a running agent (identified by `--unix-socket-path` or config) and exit |
+//!
+//! The socket path comes from `--unix-socket-path`, the `[agent]`
+//! `unix-socket-path` config key, or a default under `$XDG_RUNTIME_DIR`
+//! (falling back to the pqp data directory, or `$PQP_HOME/.pqp/agent.sock`
+//! when `PQP_HOME` is set). The socket is created with `0o600` permissions
+//! in a `0o700` directory; cached passphrases live only in process memory and
+//! are wiped (zeroized) on expiry, eviction, or shutdown.
+//!
+//! ```bash
+//! # Start the agent, then use pqp normally
+//! pqp agent --expire-time 1h &
+//! pqp encrypt -r <key-id> -o msg.pqp.enc msg.txt   # prompts once
+//! pqp decrypt -o msg.txt msg.pqp.enc               # no prompt (cached)
+//! pqp agent --stop
+//! ```
+//!
 //! # Key storage
 //!
 //! Keys are stored in `~/.local/share/pqp/keys/<key-id>/` (XDG data dir),
@@ -243,6 +284,7 @@
 //! | KDF domain separation | The SHA3-256 KDF on KEM shared secrets includes a context label (`pqp-kem-encrypt-v1`) per NIST SP 800-56C. |
 //! | HTTP timeout | `import --url` enforces a 30-second timeout to prevent slow-loris DoS. |
 //! | Path traversal defense | Key ID resolution validates all directory names against `^[0-9a-f]{16}$` before use in filesystem operations. |
+//! | Agent passphrase vault | `pqp agent` keeps cached passphrases only in memory, in `zeroize::Zeroizing` buffers, behind a `0o600` Unix socket in a `0o700` directory. Entries auto-expire (default 10 minutes, refreshed on use) and are wiped on expiry, eviction, or shutdown. |
 //!
 //! # Cryptography
 //!
@@ -294,8 +336,14 @@
 //! # Sign and verify
 //! pqp sign -u <key-id> -o file.txt.pqp.sig file.txt
 //! pqp verify file.txt.pqp.sig file.txt
+//!
+//! # Cache passphrases with the agent so later commands don't re-prompt
+//! pqp agent --expire-time 1h &
+//! pqp decrypt -o file.txt file.txt.pqp.enc   # passphrase served from cache
+//! pqp agent --stop
 //! ```
 
+pub mod agent;
 pub mod armor;
 pub mod cli;
 pub mod config;

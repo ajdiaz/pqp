@@ -14,7 +14,7 @@ use pqp::crypto::DsaVariant;
 use pqp::crypto::KemVariant;
 use pqp::{crypto, format, keyring};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use zeroize::Zeroize;
 
@@ -86,6 +86,15 @@ fn write_file(path: &str, data: &[u8]) -> Result<()> {
     std::fs::write(path, data).context(format!("writing {}", path))
 }
 
+/// Resolve the current passphrase for a key being edited, consulting the
+/// agent's cache first and falling back to an interactive prompt.
+fn current_passphrase_for(socket: Option<&Path>, key_id: &str) -> Result<String> {
+    if let Some(passphrase) = pqp::agent::get_cached_passphrase(socket, key_id) {
+        return Ok(passphrase);
+    }
+    pqp::password::read_passphrase("Enter current passphrase for key: ")
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -113,6 +122,20 @@ fn main() -> Result<()> {
             .and_then(|v| v.as_str().map(String::from))
     });
     pqp::password::set_password_tool(password_tool);
+
+    // Resolve agent socket path: CLI --unix-socket-path > config [agent].unix-socket-path
+    // > default (which may not resolve on unusual systems; None disables the agent).
+    let unix_socket_path: Option<PathBuf> = cli
+        .unix_socket_path
+        .clone()
+        .map(PathBuf::from)
+        .or_else(|| {
+            config::section(&cfg, "agent")
+                .and_then(|s| s.get("unix-socket-path"))
+                .and_then(|v| v.as_str().map(String::from))
+                .map(PathBuf::from)
+        })
+        .or_else(|| pqp::agent::default_socket_path().ok());
 
     match cli.command {
         Commands::GenKey {
@@ -447,12 +470,16 @@ fn main() -> Result<()> {
                 }
             }
 
-            let passphrase = if sign {
+            // Load the signer's secret key up front, consulting the agent for
+            // the passphrase first. Fails fast when the passphrase is unknown.
+            let signer_secret = if sign {
                 let sid = signer_id.as_deref().unwrap_or(&recipient_id);
-                Some(pqp::password::read_passphrase(&format!(
-                    "Enter passphrase for key {}: ",
-                    sid
-                ))?)
+                Some(pqp::agent::load_secret_key_via_agent(
+                    unix_socket_path.as_deref(),
+                    sid,
+                    &format!("Enter passphrase for key {}: ", sid),
+                    false,
+                )?)
             } else {
                 None
             };
@@ -516,12 +543,8 @@ fn main() -> Result<()> {
                 alg_vec.push(alg.clone());
             }
             if sign {
-                let sid = signer_id.as_deref().unwrap_or(&recipient_id);
-                let mut passphrase = passphrase.unwrap();
                 let (mut kem_sk_bytes, mut sign_sk_bytes, _sign_alg_kem, sign_alg) =
-                    keyring::load_secret_key(sid, &passphrase)
-                        .context("loading signer secret key")?;
-                passphrase.zeroize();
+                    signer_secret.expect("signer secret loaded when --sign is set");
 
                 let dsa_variant = DsaVariant::parse(&sign_alg)
                     .context(format!("unknown sign algorithm: {}", sign_alg))?;
@@ -556,11 +579,9 @@ fn main() -> Result<()> {
                 eprintln!("[dry-run] would decrypt: no action taken");
                 return Ok(());
             }
-            let passphrase = if no_passphrase {
-                String::new()
-            } else {
-                pqp::password::read_passphrase("Enter passphrase for secret key: ")?
-            };
+            // Passphrases are resolved lazily, per key: the agent is consulted
+            // first, and an interactive prompt happens at most once per run.
+            let mut prompted_passphrase: Option<String> = None;
 
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
@@ -590,61 +611,66 @@ fn main() -> Result<()> {
                 (payload.as_slice(), None)
             };
 
-            let mut passphrase_vec = passphrase.into_bytes();
             let keys = keyring::list_keys()?;
             let mut decrypted = None;
             for key in &keys {
-                let pp = std::str::from_utf8(&passphrase_vec)?;
-                if let Ok((mut kem_sk_bytes, _, kem_alg, _)) =
-                    keyring::load_secret_key(&key.key_id, pp)
-                {
-                    if let Some(kem_variant) = KemVariant::parse(&kem_alg) {
-                        let ct_len = kem_variant.ciphertext_len();
-                        if enc_data.len() < ct_len + nonce_len {
-                            kem_sk_bytes.zeroize();
-                            continue;
-                        }
-                        let ct = &enc_data[..ct_len];
-                        let nonce_arr: [u8; 24] =
-                            match enc_data[ct_len..ct_len + nonce_len].try_into() {
-                                Ok(n) => n,
-                                Err(_) => {
-                                    kem_sk_bytes.zeroize();
-                                    continue;
-                                }
-                            };
-                        let sym_ciphertext = &enc_data[ct_len + nonce_len..];
-                        let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk_bytes) {
-                            Ok(sk) => sk,
-                            Err(_) => {
-                                kem_sk_bytes.zeroize();
-                                continue;
-                            }
-                        };
+                let Some((mut kem_sk_bytes, kem_alg)) = pqp::agent::load_key_for_decrypt(
+                    unix_socket_path.as_deref(),
+                    &key.key_id,
+                    no_passphrase,
+                    &mut prompted_passphrase,
+                )?
+                else {
+                    continue;
+                };
+                let Some(kem_variant) = KemVariant::parse(&kem_alg) else {
+                    kem_sk_bytes.zeroize();
+                    continue;
+                };
+                let ct_len = kem_variant.ciphertext_len();
+                if enc_data.len() < ct_len + nonce_len {
+                    kem_sk_bytes.zeroize();
+                    continue;
+                }
+                let ct = &enc_data[..ct_len];
+                let nonce_arr: [u8; 24] = match enc_data[ct_len..ct_len + nonce_len].try_into() {
+                    Ok(n) => n,
+                    Err(_) => {
                         kem_sk_bytes.zeroize();
-                        if let Ok(shared) = crypto::kem::decapsulate(&kem_sk, ct, kem_variant) {
-                            // KDF shared secret to symmetric key (NIST SP 800-56C)
-                            use sha3::{Digest, Sha3_256};
-                            let mut kdf = Sha3_256::new();
-                            kdf.update(b"pqp-kem-encrypt-v1");
-                            kdf.update(shared);
-                            let sym_key = kdf.finalize();
-                            let mut sym_key_arr = [0u8; 32];
-                            sym_key_arr.copy_from_slice(&sym_key);
-                            if let Ok(plaintext) =
-                                sym::decrypt(&sym_key_arr, &nonce_arr, sym_ciphertext)
-                            {
-                                sym_key_arr.zeroize();
-                                decrypted = Some(plaintext);
-                                break;
-                            }
-                            sym_key_arr.zeroize();
-                        }
+                        continue;
                     }
+                };
+                let sym_ciphertext = &enc_data[ct_len + nonce_len..];
+                let kem_sk = match crypto::kem::SecretKey::from_bytes(&kem_sk_bytes) {
+                    Ok(sk) => sk,
+                    Err(_) => {
+                        kem_sk_bytes.zeroize();
+                        continue;
+                    }
+                };
+                kem_sk_bytes.zeroize();
+                if let Ok(shared) = crypto::kem::decapsulate(&kem_sk, ct, kem_variant) {
+                    // KDF shared secret to symmetric key (NIST SP 800-56C)
+                    use sha3::{Digest, Sha3_256};
+                    let mut kdf = Sha3_256::new();
+                    kdf.update(b"pqp-kem-encrypt-v1");
+                    kdf.update(shared);
+                    let sym_key = kdf.finalize();
+                    let mut sym_key_arr = [0u8; 32];
+                    sym_key_arr.copy_from_slice(&sym_key);
+                    if let Ok(plaintext) = sym::decrypt(&sym_key_arr, &nonce_arr, sym_ciphertext) {
+                        sym_key_arr.zeroize();
+                        decrypted = Some(plaintext);
+                        break;
+                    }
+                    sym_key_arr.zeroize();
                 }
             }
 
-            passphrase_vec.zeroize();
+            if let Some(passphrase) = prompted_passphrase.take() {
+                let mut bytes = passphrase.into_bytes();
+                bytes.zeroize();
+            }
 
             let mut plaintext = decrypted.ok_or_else(|| {
                 anyhow::anyhow!("decryption failed: no matching key or wrong passphrase")
@@ -712,19 +738,17 @@ fn main() -> Result<()> {
                     anyhow::bail!("{}. Use --allow-expired to force", msg);
                 }
             }
-            let passphrase = if no_passphrase {
-                String::new()
-            } else {
-                pqp::password::read_passphrase("Enter passphrase for signing key: ")?
-            };
+            // Load the signing key via the agent (falling back to a prompt).
+            let (_, mut sign_sk_bytes, _, sign_alg) = pqp::agent::load_secret_key_via_agent(
+                unix_socket_path.as_deref(),
+                &user_id,
+                "Enter passphrase for signing key: ",
+                no_passphrase,
+            )
+            .context("loading secret key")?;
             let data = read_input(&input)?;
             let input_name = input.as_deref().unwrap_or("stdin");
 
-            let mut passphrase_vec = passphrase.into_bytes();
-            let pp = std::str::from_utf8(&passphrase_vec)?;
-            let (_, mut sign_sk_bytes, _, sign_alg) =
-                keyring::load_secret_key(&user_id, pp).context("loading secret key")?;
-            passphrase_vec.zeroize();
             let dsa_variant = DsaVariant::parse(&sign_alg)
                 .context(format!("unknown sign algorithm: {}", sign_alg))?;
 
@@ -891,6 +915,46 @@ fn main() -> Result<()> {
                 what,
             );
         }
+        Commands::Agent {
+            mut expire_time,
+            stop,
+        } => {
+            let agent_cfg = config::section(&cfg, "agent");
+            expire_time = config::apply_str(&expire_time, agent_cfg, "expire-time", "10m");
+
+            let socket = unix_socket_path.clone().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "cannot determine agent socket path; use --unix-socket-path \
+                     or set [agent] unix-socket-path in the config file"
+                )
+            })?;
+
+            if stop {
+                if cli.dry_run {
+                    eprintln!(
+                        "[dry-run] would stop agent at {}: no action taken",
+                        socket.display()
+                    );
+                    return Ok(());
+                }
+                pqp::agent::client::stop(&socket)?;
+                println!("Agent stopped: {}", socket.display());
+                return Ok(());
+            }
+
+            if cli.dry_run {
+                eprintln!("[dry-run] would agent: no action taken");
+                return Ok(());
+            }
+
+            let ttl = pqp::agent::parse_duration(&expire_time)?;
+            println!(
+                "pqp-agent listening on {} (cache TTL {})",
+                socket.display(),
+                pqp::agent::format_duration(ttl)
+            );
+            pqp::agent::server::run(&socket, ttl)?;
+        }
         Commands::Export {
             key_id,
             output,
@@ -970,16 +1034,23 @@ fn main() -> Result<()> {
                 anyhow::bail!("--passphrase and --no-passphrase are mutually exclusive");
             }
 
+            let resolved_id = keyring::resolve_key_id(&key_id)?;
+
+            let mut passphrase_changed = false;
+            let mut agent_passphrase_update: Option<String> = None;
             let new_passphrase: Option<(String, String)> = if no_passphrase {
-                let old = pqp::password::read_passphrase("Enter current passphrase for key: ")?;
+                passphrase_changed = true;
+                let old = current_passphrase_for(unix_socket_path.as_deref(), &resolved_id)?;
                 Some((old, String::new()))
             } else if passphrase {
-                let old = pqp::password::read_passphrase("Enter current passphrase for key: ")?;
+                passphrase_changed = true;
+                let old = current_passphrase_for(unix_socket_path.as_deref(), &resolved_id)?;
                 let new_p = pqp::password::read_passphrase("Enter new passphrase for key: ")?;
                 let new_p2 = pqp::password::read_passphrase("Confirm new passphrase: ")?;
                 if new_p != new_p2 {
                     return Err(anyhow::anyhow!("passphrases do not match"));
                 }
+                agent_passphrase_update = Some(new_p.clone());
                 Some((old, new_p))
             } else {
                 None
@@ -1009,15 +1080,45 @@ fn main() -> Result<()> {
                 })
                 .collect();
 
-            let meta = keyring::edit_key(
-                &key_id,
+            let meta = match keyring::edit_key(
+                &resolved_id,
                 user,
                 expiration_date,
                 encoding,
                 compress,
                 new_passphrase,
                 metadata_entries,
-            )?;
+            ) {
+                Ok(meta) => meta,
+                Err(error) => {
+                    // The agent may have cached a stale passphrase; drop it so
+                    // the next run re-prompts instead of retrying a bad value.
+                    if passphrase_changed {
+                        pqp::agent::forget_cached_passphrase(
+                            unix_socket_path.as_deref(),
+                            &resolved_id,
+                        );
+                    }
+                    return Err(error);
+                }
+            };
+
+            // Keep the agent cache consistent with the new passphrase.
+            if let Some(ref new_passphrase) = agent_passphrase_update {
+                if new_passphrase.is_empty() {
+                    pqp::agent::forget_cached_passphrase(unix_socket_path.as_deref(), &resolved_id);
+                } else {
+                    pqp::agent::cache_passphrase(
+                        unix_socket_path.as_deref(),
+                        &resolved_id,
+                        new_passphrase,
+                    );
+                }
+            }
+            if let Some(passphrase) = agent_passphrase_update {
+                let mut bytes = passphrase.into_bytes();
+                bytes.zeroize();
+            }
 
             println!("Edited key: key-id={}", meta.key_id);
             println!("  user-id: {}", meta.user_id);

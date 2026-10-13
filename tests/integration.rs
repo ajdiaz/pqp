@@ -1434,3 +1434,299 @@ fn test_cli_edit_key_dry_run() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// Spawn the `pqp agent` daemon as a subprocess on `socket` with the given
+/// cache TTL, wait until it answers `PING`, and return the child.
+fn start_agent(socket: &str, expire_time: &str) -> std::process::Child {
+    let mut child = Command::new(pqp_binary())
+        .args([
+            "agent",
+            "--unix-socket-path",
+            socket,
+            "--expire-time",
+            expire_time,
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn pqp agent");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        if pqp::agent::client::is_running(std::path::Path::new(socket)) {
+            return child;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    panic!("pqp agent did not become ready on {}", socket);
+}
+
+/// Ask the agent to stop and wait for the subprocess to exit.
+fn stop_agent(child: &mut std::process::Child, socket: &str) {
+    let _ = pqp::agent::client::stop(std::path::Path::new(socket));
+    let _ = child.wait();
+}
+
+#[test]
+fn test_cli_agent_caches_passphrase() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let socket = home.path().join("agent.sock").to_string_lossy().to_string();
+    let tool = write_askpass_script("agent-pass");
+
+    let mut agent = start_agent(&socket, "60");
+
+    // gen-key via the askpass tool (does not touch the agent cache)
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "agent@example.com",
+            "--password-tool",
+            &tool,
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "gen-key failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let key_id = get_key_id(&home_path);
+
+    // encrypt --sign prompts via the tool, then caches the passphrase
+    let plain = home.path().join("agent.txt");
+    std::fs::write(&plain, b"agent cached roundtrip").unwrap();
+    let enc = home.path().join("agent.txt.pqp.enc");
+    let output = Command::new(pqp_binary())
+        .args([
+            "encrypt",
+            "-r",
+            &key_id,
+            "--sign",
+            "--password-tool",
+            &tool,
+            "--unix-socket-path",
+            &socket,
+            "-o",
+        ])
+        .arg(&enc)
+        .arg(&plain)
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "encrypt --sign failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // decrypt WITHOUT --password-tool: no TTY is available, so success proves
+    // the passphrase came from the agent cache.
+    let dec = home.path().join("agent.dec");
+    let output = Command::new(pqp_binary())
+        .args(["decrypt", "--unix-socket-path", &socket, "-o"])
+        .arg(&dec)
+        .arg(&enc)
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "decrypt without tool failed (agent cache not used?): {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(std::fs::read(&dec).unwrap(), b"agent cached roundtrip");
+
+    // sign WITHOUT --password-tool: likewise served from the cache.
+    let sig = home.path().join("agent.txt.pqp.sig");
+    let output = Command::new(pqp_binary())
+        .args(["sign", "-u", &key_id, "--unix-socket-path", &socket, "-o"])
+        .arg(&sig)
+        .arg(&plain)
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "sign without tool failed (agent cache not used?): {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The agent cache hit must also refresh the TTL: a `GET` right after the
+    // operations above still works (best-effort, agent is still up).
+    assert!(pqp::agent::client::is_running(std::path::Path::new(
+        &socket
+    )));
+
+    stop_agent(&mut agent, &socket);
+}
+
+#[test]
+fn test_cli_agent_expired_cache_falls_back_to_prompt() {
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let socket = home.path().join("agent.sock").to_string_lossy().to_string();
+    let tool = write_askpass_script("agent-pass");
+
+    // 1 second TTL so the cached entry expires quickly.
+    let mut agent = start_agent(&socket, "1");
+
+    let output = Command::new(pqp_binary())
+        .args([
+            "gen-key",
+            "-u",
+            "agent@example.com",
+            "--password-tool",
+            &tool,
+        ])
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "gen-key failed");
+    let key_id = get_key_id(&home_path);
+
+    let plain = home.path().join("expire.txt");
+    std::fs::write(&plain, b"expire test").unwrap();
+
+    // sign via the tool, which caches the passphrase
+    let sig = home.path().join("expire.txt.pqp.sig");
+    let output = Command::new(pqp_binary())
+        .args([
+            "sign",
+            "-u",
+            &key_id,
+            "--password-tool",
+            &tool,
+            "--unix-socket-path",
+            &socket,
+            "-o",
+        ])
+        .arg(&sig)
+        .arg(&plain)
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "sign (cache) failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Let the entry expire past its 1s TTL.
+    std::thread::sleep(std::time::Duration::from_millis(1600));
+
+    // sign again WITHOUT a tool: the cache entry has expired and there is no
+    // TTY, so the command must fail rather than silently use stale data.
+    let sig2 = home.path().join("expire2.txt.pqp.sig");
+    let output = Command::new(pqp_binary())
+        .args(["sign", "-u", &key_id, "--unix-socket-path", &socket, "-o"])
+        .arg(&sig2)
+        .arg(&plain)
+        .env("PQP_HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "sign without tool should fail once the cached entry expires"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot read passphrase") || stderr.contains("TTY"),
+        "unexpected error after expiry: {}",
+        stderr
+    );
+
+    stop_agent(&mut agent, &socket);
+}
+
+#[test]
+fn test_cli_agent_stop_command() {
+    let home = TempDir::new().unwrap();
+    let socket = home.path().join("agent.sock");
+    let socket_str = socket.to_string_lossy().to_string();
+    let mut agent = start_agent(&socket_str, "60");
+    assert!(pqp::agent::client::is_running(&socket));
+
+    let output = Command::new(pqp_binary())
+        .args(["agent", "--stop", "--unix-socket-path", &socket_str])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "agent --stop failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        agent.wait().unwrap().success(),
+        "agent process should exit cleanly after --stop"
+    );
+    assert!(!pqp::agent::client::is_running(&socket));
+}
+
+#[test]
+fn test_cli_agent_dry_run() {
+    let output = Command::new(pqp_binary())
+        .args([
+            "agent",
+            "--dry-run",
+            "--unix-socket-path",
+            "/tmp/pqp-agent-dry-run.sock",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "agent --dry-run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("dry-run"), "expected dry-run output");
+}
+
+#[test]
+fn test_cli_agent_unix_socket_path_config_option() {
+    // The config file `[agent] unix-socket-path` must be honoured when no CLI
+    // flag is given.
+    let home = TempDir::new().unwrap();
+    let home_path = home.path().to_string_lossy().to_string();
+    let socket = home.path().join("cfg-agent.sock");
+    let socket_str = socket.to_string_lossy().to_string();
+
+    std::fs::create_dir_all(home.path().join(".pqp")).unwrap();
+    std::fs::write(
+        home.path().join(".pqp").join("pqp.toml"),
+        format!(
+            "[agent]\nunix-socket-path = \"{}\"\nexpire-time = \"60\"\n",
+            socket_str
+        ),
+    )
+    .unwrap();
+
+    // Start the agent relying purely on the config file for its socket path.
+    let mut agent = Command::new(pqp_binary())
+        .args(["agent"])
+        .env("PQP_HOME", &home_path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        if pqp::agent::client::is_running(&socket) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        pqp::agent::client::is_running(&socket),
+        "agent did not start on the config-file socket path"
+    );
+
+    // Stopping via the config file path must work too.
+    let _ = pqp::agent::client::stop(&socket);
+    let _ = agent.wait();
+    assert!(!pqp::agent::client::is_running(&socket));
+}
