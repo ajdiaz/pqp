@@ -43,6 +43,14 @@ pub struct Cli {
     )]
     pub password_tool: Option<String>,
 
+    /// Path to the pqp agent Unix socket.
+    #[arg(
+        long = "unix-socket-path",
+        global = true,
+        help = "Path to the pqp agent Unix socket"
+    )]
+    pub unix_socket_path: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -261,6 +269,18 @@ pub enum Commands {
         no_passphrase: bool,
         #[arg(long = "metadata", help = "Add key metadata as key=value (repeatable)")]
         metadata: Vec<String>,
+    },
+    /// Run the passphrase-caching agent (gpg-agent/ssh-agent analogue).
+    #[command(name = "agent")]
+    Agent {
+        #[arg(
+            long = "expire-time",
+            default_value = "10m",
+            help = "Cache time-to-live (e.g. 600, 10m, 8h, 1d)"
+        )]
+        expire_time: String,
+        #[arg(long = "stop", help = "Stop a running agent and exit")]
+        stop: bool,
     },
     /// Import a public key (armored).
     #[command(name = "import")]

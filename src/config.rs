@@ -26,6 +26,10 @@
 //! [export]
 //! format = "pqp"
 //! compress = "none"
+//!
+//! [agent]
+//! expire-time = "10m"
+//! unix-socket-path = "/run/user/1000/pqp-agent.sock"
 //! ```
 
 use anyhow::{Context, Result};

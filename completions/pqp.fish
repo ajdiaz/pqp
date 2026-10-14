@@ -12,6 +12,7 @@ complete -c pqp -s n -l dry-run -d "Do nothing, print dry-run message"
 complete -c pqp -f -l keyring-path -d "Use an alternative keyring directory" -r
 complete -c pqp -f -l config -d "Path to an alternative configuration file" -r
 complete -c pqp -f -l password-tool -d "External tool for passphrase prompts" -r
+complete -c pqp -f -l unix-socket-path -d "Path to the pqp agent Unix socket" -r
 
 # --- gen-key ---
 complete -c pqp -f -n "__fish_use_subcommand" -a gen-key -d "Generate a PQ key pair (Kyber + Dilithium)"
@@ -104,3 +105,10 @@ complete -c pqp -f -n "__fish_seen_subcommand_from import" -l dont-ask-confirmat
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l force -d "Force override of existing key with same fingerprint"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -l help -d "Print help"
 complete -c pqp -f -n "__fish_seen_subcommand_from import" -a "(__fish_complete_path)" -d "Armored key file"
+
+# --- agent ---
+complete -c pqp -f -n "__fish_use_subcommand" -a agent -d "Run a passphrase-caching agent (gpg-agent/ssh-agent analogue)"
+complete -c pqp -f -n "__fish_seen_subcommand_from agent" -l expire-time -d "Cache time-to-live (e.g. 600, 10m, 8h, 1h30m)" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from agent" -l stop -d "Stop a running agent and exit"
+complete -c pqp -f -n "__fish_seen_subcommand_from agent" -l unix-socket-path -d "Path to the pqp agent Unix socket" -r
+complete -c pqp -f -n "__fish_seen_subcommand_from agent" -l help -d "Print help"
