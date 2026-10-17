@@ -581,6 +581,11 @@ The socket path is resolved in this order: \fB--unix-socket-path\fR flag,
 The socket is created with \fB0o600\fR permissions inside a \fB0o700\fR
 directory.  Cached passphrases live only in process memory and are zeroized
 on expiry, eviction, or shutdown; they are never written to disk.
+.PP
+A systemd \fBuser\fR unit that keeps the agent running in the background is
+provided in \fIcontrib/systemd/pqp-agent.service\fR.  Install it with
+\fBmake install-systemd\fR, then enable it with
+\fBsystemctl --user enable --now pqp-agent.service\fR.
 
 .SH KEY IDENTIFIER RESOLUTION
 All commands that take a key reference (\fBencrypt \-r\fR, \fBencrypt \-u\fR,

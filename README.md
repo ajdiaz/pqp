@@ -142,6 +142,27 @@ pqp agent --stop                                 # stop and wipe the cache
 - Cached passphrases live in process memory only and are zeroized on expiry, eviction, or shutdown — never written to disk.
 - Without a running agent, `pqp` falls back to the normal interactive prompt, so nothing breaks.
 
+#### 🐧 Run the agent as a systemd user service
+
+A ready-to-use systemd **user** unit ships in `contrib/systemd/`. Enable it once
+and the agent stays up in the background (and across logins):
+
+```bash
+make install-systemd                     # copies contrib/systemd/pqp-agent.service
+systemctl --user enable --now pqp-agent.service
+systemctl --user status pqp-agent.service    # active (running)
+
+systemctl --user restart pqp-agent.service   # restart (wipes the cache)
+systemctl --user stop pqp-agent.service      # stop and wipe the cache
+journalctl --user -u pqp-agent.service -f    # follow the logs
+```
+
+Edit `contrib/systemd/pqp-agent.service` (or `systemctl --user edit`) if `pqp`
+is not installed at `/usr/bin/pqp`. The unit is sandboxed (`NoNewPrivileges`,
+`ProtectSystem=strict`, `RestrictAddressFamilies=AF_UNIX`, …) and stops the
+agent gracefully so the in-memory cache is wiped and the socket removed. See
+[`contrib/systemd/README.md`](contrib/systemd/README.md) for details.
+
 ### Sign and verify
 
 ```bash

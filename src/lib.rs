@@ -262,6 +262,11 @@
 //! pqp agent --stop
 //! ```
 //!
+//! A systemd **user** unit that keeps the agent running in the background is
+//! provided in `contrib/systemd/pqp-agent.service`. Install it with
+//! `make install-systemd`, then enable it with
+//! `systemctl --user enable --now pqp-agent.service`.
+//!
 //! # Key storage
 //!
 //! Keys are stored in `~/.local/share/pqp/keys/<key-id>/` (XDG data dir),
